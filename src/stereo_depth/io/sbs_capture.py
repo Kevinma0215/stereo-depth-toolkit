@@ -32,14 +32,22 @@ class SBSSplitter:
         return left, right
 
 
-def open_camera(device: int, width: int = 0, height: int = 0, fps: int = 0):
-    cap = cv2.VideoCapture(device)
+def open_camera(device=0, path=None, width=0, height=0, fps=0):
+
+    if path:
+        cap = cv2.VideoCapture(path, cv2.CAP_V4L2)
+    else:
+        cap = cv2.VideoCapture(int(device), cv2.CAP_V4L2)
+
     if not cap.isOpened():
-        raise RuntimeError(f"Failed to open camera device {device}")
+        raise RuntimeError(f"Failed to open camera (device={device}, path={path})")
+
     if width > 0:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     if height > 0:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     if fps > 0:
         cap.set(cv2.CAP_PROP_FPS, fps)
+
     return cap
+

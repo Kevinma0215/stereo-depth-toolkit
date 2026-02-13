@@ -4,7 +4,16 @@ import cv2
 from stereo_depth.io.sbs_capture import SBSSplitter, open_camera
 
 def cmd_preview(args: argparse.Namespace) -> int:
-    cap = open_camera(args.device, args.width, args.height, args.fps)
+    # cap = open_camera(args.device, path=args.path, width=args.width, height=args.height, fps=args.fps)
+    cap = open_camera(
+    args.device,
+    path=args.path,
+    width=args.width,
+    height=args.height,
+    fps=args.fps
+)
+
+
     splitter = SBSSplitter(
         swap_lr=args.swap_lr,
         crop_x=args.crop_x,
@@ -52,6 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
     prev.add_argument("--fps", type=int, default=0, help="Capture FPS (0: default)")
     prev.add_argument("--swap-lr", action="store_true", help="Swap left/right after split")
     prev.add_argument("--gray", action="store_true", help="Display grayscale")
+    prev.add_argument("--path", type=str, default=None, help="V4L2 device path, e.g. /dev/video1")
+
+
 
     # Cropping to handle borders/overlays
     prev.add_argument("--crop-x", type=int, default=0)

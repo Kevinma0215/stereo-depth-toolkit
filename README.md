@@ -76,15 +76,3 @@ Capture 30–60 image pairs from different angles.
 * Python 3.10
 * OpenCV
 * NumPy
-
-
-
----
-
-# ✅ 4️⃣ Commit
-```bash
-git add .
-git commit -m "Add minimal usage and hardware documentation"
-git push
-````
-
