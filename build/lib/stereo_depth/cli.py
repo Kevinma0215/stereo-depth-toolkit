@@ -28,14 +28,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
     while True:
         ok, frame = cap.read()
         if not ok:
-            if args.video is not None:
-                print("End of video or decode error.")
-                break
-            else:
-                print("Failed to read camera frame, retrying...")
-                continue
-            # print("Failed to read frame")
-            # break
+            print("Failed to read frame")
+            break
 
         left, right = splitter.split(frame)
 

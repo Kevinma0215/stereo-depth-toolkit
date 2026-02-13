@@ -40,8 +40,8 @@ def open_camera(device=0, path=None, width=0, height=0, fps=0, video: str | None
     else:
         cap = cv2.VideoCapture(int(device), cv2.CAP_V4L2)
 
-    # if not cap.isOpened():
-    #     raise RuntimeError(f"Failed to open camera (device={device}, path={path})")
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open camera (device={device}, path={path})")
 
     if width > 0:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
