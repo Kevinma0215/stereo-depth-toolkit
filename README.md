@@ -45,7 +45,26 @@ stereo-depth preview --path /dev/video0 --swap-lr
 ```
 
 ---
+## Record & Replay Video
+Record:
+```bash
+ffmpeg -f v4l2 -input_format mjpeg -video_size 2560x720 -framerate 30 \
+  -i /dev/video0 -t 10 -c:v libx264 -pix_fmt yuv420p sbs_scene_10s.mp4
+```
+Replay:
+```bash
+ffplay sbs_scene_10s.mp4
+```
+mp4 to avi:
+```bash
+ffmpeg -y -i sbs_calib_20s.mp4 -c:v mjpeg -q:v 3 -an sbs_calib_20s_mjpg.avi
+```
 
+Or:
+```bash
+stereo-depth preview --video "sbs_scene_10s_mjpg.avi"
+```
+---
 ## Collect Calibration Images
 
 Use a Charuco or checkerboard board.
