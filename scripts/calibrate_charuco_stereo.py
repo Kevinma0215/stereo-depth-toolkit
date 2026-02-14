@@ -19,19 +19,37 @@ def collect_charuco(img_paths, board, dictionary):
             img_size = (w, h)
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        corners, ids, _ = aruco.detectMarkers(gray, dictionary)
+        # corners, ids, _ = aruco.detectMarkers(gray, dictionary)
+        # Detect markers (compatible with new OpenCV API)
+        if hasattr(aruco, "ArucoDetector"):
+            detector = aruco.ArucoDetector(dictionary)
+            corners, ids, _ = detector.detectMarkers(gray)
+        else:
+            corners, ids, _ = aruco.detectMarkers(gray, dictionary)
+
 
         if ids is None or len(ids) < 4:
             continue
 
-        ok, ch_corners, ch_ids = aruco.interpolateCornersCharuco(
+        # ok, ch_corners, ch_ids = aruco.interpolateCornersCharuco(
+        #     markerCorners=corners,
+        #     markerIds=ids,
+        #     image=gray,
+        #     board=board
+        # )
+        ret = aruco.interpolateCornersCharuco(
             markerCorners=corners,
             markerIds=ids,
             image=gray,
             board=board
         )
-        if ok is None or ok < 10:
+        if ret[0] is None or ret[0] < 10:
             continue
+
+        ok, ch_corners, ch_ids = ret
+
+        # if ok is None or ok < 10:
+        #     continue
 
         all_corners.append(ch_corners)
         all_ids.append(ch_ids)
