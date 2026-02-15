@@ -24,14 +24,33 @@ This project uses a USB stereo camera exposing:
 ## Environment Setup
 
 ```bash
-conda create -n stereo-py310 python=3.10 -y
-conda activate stereo-py310
-cd stereo-depth-toolkit
-python -m pip install -e .
-````
+conda env create -f environment.yml
+conda activate CV   # 或你的新 env 名稱
+```
 
 ---
 
+## Data Flow
+Calibration:
+```mermaid
+flowchart LR
+  A[Capture Pairs] --> B[Detect Board]
+  B --> C[Validate Coverage]
+  C --> D[Stereo Calibrate]
+  D --> E[Rectify Params]
+  E --> F[Save calib.yaml]
+```
+
+Runtime:
+```mermaid
+flowchart LR
+  A[Frame Source] --> B[Rectify]
+  B --> C[Stereo Matcher]
+  C --> D[Depth]
+  D --> E[Postprocess]
+  E --> F[Output]
+```
+---
 ## Preview Stereo Stream
 
 ```bash
