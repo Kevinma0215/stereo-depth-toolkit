@@ -109,6 +109,17 @@ Capture 30–60 image pairs from different angles.
 
 ---
 
+## Calibration
+```bash
+stereo-depth calibrate \
+  --data data/calib/charuco_2026-02-14_run1 \
+  --out outputs/calib/calib.yaml \
+  --square-length 0.03 \
+  --marker-length 0.022 \
+  --dict-name DICT_5X5_100 \
+  --min-views 10
+```
+
 ## Requirements
 
 * Python 3.10

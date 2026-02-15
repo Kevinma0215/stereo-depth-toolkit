@@ -1,8 +1,11 @@
 README.md
 pyproject.toml
 src/stereo_depth/__init__.py
+src/stereo_depth/app/calibrate.py
+src/stereo_depth/app/rectify.py
 src/stereo_depth/calib/__init__.py
 src/stereo_depth/calib/boards.py
+src/stereo_depth/calib/collect.py
 src/stereo_depth/calib/detect.py
 src/stereo_depth/calib/rectify.py
 src/stereo_depth/calib/stereo_calib.py
@@ -21,6 +24,7 @@ src/stereo_depth/depth/depth.py
 src/stereo_depth/depth/matcher.py
 src/stereo_depth/depth/post.py
 src/stereo_depth/io/__init__.py
+src/stereo_depth/io/pairs.py
 src/stereo_depth/io/sbs_capture.py
 src/stereo_depth/io/sinks.py
 src/stereo_depth/io/sources.py
@@ -36,6 +40,9 @@ src/stereo_depth_toolkit.egg-info/dependency_links.txt
 src/stereo_depth_toolkit.egg-info/entry_points.txt
 src/stereo_depth_toolkit.egg-info/requires.txt
 src/stereo_depth_toolkit.egg-info/top_level.txt
+tests/test_charuco_detect_synth.py
+tests/test_cli_preview.py
 tests/test_depth.py
 tests/test_detect.py
+tests/test_id_matching.py
 tests/test_rectify.py
