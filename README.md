@@ -119,9 +119,13 @@ stereo-depth calibrate \
   --dict-name DICT_5X5_100 \
   --min-views 10
 ```
-
-## Requirements
-
-* Python 3.10
-* OpenCV
-* NumPy
+---
+## Depth estimation
+```bash
+stereo-depth depth \
+  --calib outputs/calib/calib_strict.yaml \
+  --left  data/calib/charuco_2026-02-14_run1/left/000000.png \
+  --right data/calib/charuco_2026-02-14_run1/right/000000.png \
+  --out outputs/depth/demo \
+  --preset indoor
+```

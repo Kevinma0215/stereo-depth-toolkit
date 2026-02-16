@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/stereo_depth/__init__.py
 src/stereo_depth/app/calibrate.py
+src/stereo_depth/app/depth.py
 src/stereo_depth/app/rectify.py
 src/stereo_depth/calib/__init__.py
 src/stereo_depth/calib/boards.py
@@ -13,7 +14,8 @@ src/stereo_depth/cli/__init__.py
 src/stereo_depth/cli/app.py
 src/stereo_depth/cli/calibrate_cmd.py
 src/stereo_depth/cli/capture_cmd.py
-src/stereo_depth/cli/cli.py
+src/stereo_depth/cli/depth_cmd.py
+src/stereo_depth/cli/old_cli.py
 src/stereo_depth/cli/preview_cmd.py
 src/stereo_depth/cli/rectify_cmd.py
 src/stereo_depth/config/__init__.py
@@ -23,6 +25,8 @@ src/stereo_depth/depth/__init__.py
 src/stereo_depth/depth/depth.py
 src/stereo_depth/depth/matcher.py
 src/stereo_depth/depth/post.py
+src/stereo_depth/depth/presets.py
+src/stereo_depth/depth/sgbm.py
 src/stereo_depth/io/__init__.py
 src/stereo_depth/io/pairs.py
 src/stereo_depth/io/sbs_capture.py

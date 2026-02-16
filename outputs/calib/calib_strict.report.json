@@ -1,0 +1,51 @@
+{
+  "status": "success",
+  "left": {
+    "total": 77,
+    "ok": 76,
+    "fail_no_markers": 1,
+    "fail_too_few_markers": 0,
+    "fail_too_few_charuco": 0,
+    "min_charuco_seen": 0,
+    "max_charuco_seen": 24
+  },
+  "right": {
+    "total": 77,
+    "ok": 75,
+    "fail_no_markers": 1,
+    "fail_too_few_markers": 0,
+    "fail_too_few_charuco": 1,
+    "min_charuco_seen": 0,
+    "max_charuco_seen": 24
+  },
+  "inputs": {
+    "data_dir": "data/calib/charuco_2026-02-14_run1",
+    "num_left_images": 77,
+    "num_right_images": 77
+  },
+  "params": {
+    "squares_x": 7,
+    "squares_y": 5,
+    "square_length": 0.03,
+    "marker_length": 0.022,
+    "dict_name": "DICT_5X5_100",
+    "min_views": 30,
+    "min_markers": 4,
+    "min_charuco": 10,
+    "min_common_ids": 20
+  },
+  "precheck": {
+    "paired_valid_views_est": 75,
+    "image_size": {
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "metrics": {
+    "mono_reproj_L": 1.4227282730227093,
+    "mono_reproj_R": 1.3509598576618544,
+    "stereo_rms": 1.7406045010669782,
+    "used_views": 75,
+    "matched_views": 63
+  }
+}
