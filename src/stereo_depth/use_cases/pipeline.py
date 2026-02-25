@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from typing import Iterator, Optional
+
 from stereo_depth.entities import FramePair, DepthMap, CalibrationResult
-from stereo_depth.use_cases.ports import IRectifier, IDisparityMatcher, IDepthEstimator
+from stereo_depth.use_cases.ports import (
+    ICameraSource,
+    IRectifier,
+    IDisparityMatcher,
+    IDepthEstimator,
+)
 
 
 class StereoPipeline:
@@ -11,7 +18,7 @@ class StereoPipeline:
     same instance across all ``process()`` calls so that the rectifier can
     cache its undistort/rectify maps efficiently.
 
-    Data flow::
+    Data flow (single frame)::
 
         FramePair
           → IRectifier.rectify()   → RectifiedPair
@@ -19,6 +26,13 @@ class StereoPipeline:
           → IDepthEstimator.to_depth()  → DepthMap (left_rect=None)
           → attach RectifiedPair.left as DepthMap.left_rect
           → return DepthMap
+
+    Data flow (streaming)::
+
+        ICameraSource.stream()
+          └─▶ FramePair (repeated)
+                └─▶ process()  → DepthMap
+                      └─▶ yield DepthMap
     """
 
     def __init__(
@@ -27,11 +41,13 @@ class StereoPipeline:
         matcher: IDisparityMatcher,
         depth_estimator: IDepthEstimator,
         calib: CalibrationResult,
+        camera_source: Optional[ICameraSource] = None,
     ) -> None:
         self._rectifier = rectifier
         self._matcher = matcher
         self._depth_estimator = depth_estimator
         self._calib = calib
+        self._camera_source = camera_source
 
     def process(self, pair: FramePair) -> DepthMap:
         rect = self._rectifier.rectify(pair, self._calib)
@@ -43,3 +59,17 @@ class StereoPipeline:
             left_rect=rect.left,
             right_rect=rect.right,
         )
+
+    def stream(self) -> Iterator[DepthMap]:
+        """Yield a DepthMap for every frame produced by the attached camera_source.
+
+        Raises:
+            RuntimeError: if no ``camera_source`` was provided at construction.
+        """
+        if self._camera_source is None:
+            raise RuntimeError(
+                "StereoPipeline.stream() requires a camera_source. "
+                "Pass camera_source= to the constructor."
+            )
+        for pair in self._camera_source.stream():
+            yield self.process(pair)

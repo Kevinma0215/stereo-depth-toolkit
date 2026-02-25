@@ -16,7 +16,14 @@ class SgbmMatcher(IDisparityMatcher):
                      Defaults to 'indoor'.
     """
 
-    def __init__(self, preset_name: str = "indoor") -> None:
+    def __init__(
+        self,
+        preset_name: str = "indoor",
+        *,
+        preset: str | None = None,
+    ) -> None:
+        if preset is not None:
+            preset_name = preset
         if preset_name not in _VALID_PRESETS:
             raise ValueError(
                 f"Unknown preset '{preset_name}'. "

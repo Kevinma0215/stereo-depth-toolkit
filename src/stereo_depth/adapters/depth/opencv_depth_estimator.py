@@ -29,3 +29,7 @@ class OpenCVDepthEstimator(IDepthEstimator):
         depth = points[:, :, 2].astype(np.float32)
         depth[disparity <= 0.0] = np.nan
         return DepthMap(data=depth, disparity=disparity.copy())
+
+
+# Convenience alias matching the example scripts
+OpencvDepthEstimator = OpenCVDepthEstimator

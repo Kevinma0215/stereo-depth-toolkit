@@ -36,6 +36,7 @@ stereo-depth rectify   --calib outputs/calib/calib.yaml --data data/calib/charuc
 stereo-depth depth     --calib outputs/calib/calib_strict.yaml \
   --left <left.png> --right <right.png> --out outputs/depth/demo --preset indoor \
   --matcher sgbm   # or: --matcher retinify
+stereo-depth stream --calib outputs/calib/calib_strict.yaml
 ```
 
 ## Hardware
@@ -63,7 +64,7 @@ src/stereo_depth/
 ├── use_cases/              # Layer 2 — abstract ports + pipeline
 │   ├── ports.py            # ABCs: ICameraSource, ICalibrationRepo,
 │   │                       #       IRectifier, IDisparityMatcher, IDepthEstimator
-│   └── pipeline.py         # StereoPipeline: wires Rectifier → Matcher → DepthEstimator
+│   └── pipeline.py         # StereoPipeline: process() + stream(); wires Rectifier → Matcher → DepthEstimator
 │
 ├── adapters/               # Layer 3 — concrete implementations of ports.py
 │   ├── calibration/
@@ -71,12 +72,13 @@ src/stereo_depth/
 │   │   ├── yaml_repo.py           # ICalibrationRepo: load/save CalibrationResult ↔ YAML
 │   │   └── retinify_adapter.py    # calibration_result_to_retinify() → dict
 │   ├── camera/
-│   │   ├── uvc_source.py          # open_source() + UVCSource (live camera)
-│   │   └── file_source.py         # FileSource (offline / tests)
+│   │   ├── uvc_source.py          # open_source() + UVCSource (low-level) + UvcSource (convenience)
+│   │   └── file_source.py         # FileSource: single-file or directory mode (offline / tests)
 │   ├── rectifier/
 │   │   └── opencv_rectifier.py    # IRectifier via cv2.remap (R1/R2/P1/P2)
 │   ├── matcher/
 │   │   ├── sgbm_matcher.py        # IDisparityMatcher — OpenCV SGBM (CPU fallback)
+│   │   ├── sgbm_presets.py        # SGBMPreset dataclass + preset() factory (indoor/outdoor/high_quality)
 │   │   └── retinify_matcher.py    # IDisparityMatcher — Retinify TensorRT (primary)
 │   └── depth/
 │       └── opencv_depth_estimator.py  # IDepthEstimator via cv2.reprojectImageTo3D
@@ -96,8 +98,9 @@ src/stereo_depth/
 │   ├── io/                 # pairs.py, sbs_capture.py (SBSSplitter), sinks.py (VideoRecorder)
 │   └── viz/                # preview.py (preview_sbs), overlay.py
 │
-└── depth/                  # Legacy depth helpers still used by sgbm_matcher
-    └── presets.py          # Named SGBM parameter presets (indoor / outdoor / …)
+└── utils/                  # Shared helpers (logging, type aliases)
+    ├── logging.py
+    └── types.py
 ```
 
 > **Rule:** `entities/` and `use_cases/` must never import from `adapters/`, `app/`, `cli/`, or `infrastructure/`.
@@ -150,6 +153,7 @@ class IDepthEstimator(ABC):
 
 class ICameraSource(ABC):
     def grab(self) -> FramePair: ...
+    def stream(self) -> Iterator[FramePair]: ...   # yields until exhausted or KeyboardInterrupt
 
 class ICalibrationRepo(ABC):
     def load(self, path: str) -> CalibrationResult: ...
@@ -164,7 +168,7 @@ class ICalibrationRepo(ABC):
 
 | Matcher | File | Backend | Notes |
 |---------|------|---------|-------|
-| `SgbmMatcher` | `adapters/matcher/sgbm_matcher.py` | OpenCV CPU | Fallback; presets from `depth/presets.py` |
+| `SgbmMatcher` | `adapters/matcher/sgbm_matcher.py` | OpenCV CPU | Fallback; presets from `adapters/matcher/sgbm_presets.py` |
 | `RetinifyMatcher` | `adapters/matcher/retinify_matcher.py` | TensorRT GPU | Primary; raises `ImportError` at module level if `retinify` absent |
 
 `RetinifyMatcher` maps preset names `'fast'/'balanced'/'accurate'` to `retinify.DepthMode`.
@@ -176,6 +180,7 @@ CLI: `--matcher sgbm` (default) or `--matcher retinify`.
 
 ## Pipeline Data Flow
 
+Single frame (`StereoPipeline.process(pair)`):
 ```
 ICameraSource.grab()
   └─▶ FramePair
@@ -185,6 +190,16 @@ ICameraSource.grab()
                           └─▶ disparity float32 (H, W)
                                 └─▶ IDepthEstimator.to_depth()
                                       └─▶ DepthMap (data, disparity, left_rect, right_rect)
+```
+
+Continuous stream (`StereoPipeline.stream()` — requires `camera_source=` in constructor):
+```
+ICameraSource.stream()
+  └─▶ FramePair  ──┐
+                   │ (repeated for every frame)
+                   ▼
+             StereoPipeline.process()
+                   └─▶ DepthMap   →  yield to caller
 ```
 
 ---
@@ -230,10 +245,10 @@ All tests are **hardware-independent** (use `FileSource` or synthetic data):
 | `test_rectify.py` | Epipolar alignment < 2 px after rectification |
 | `test_depth.py` | SGBM disparity sign + median accuracy on synthetic shifted pair |
 | `test_id_matching.py` | `_match_ids_one_view` common-ID extraction |
-| `test_pipeline_integration.py` | Full `StereoPipeline` with real calib + image pair (skipped if files absent) |
-| `test_retinify.py` | `retinify_adapter` unit tests; `RetinifyMatcher` tests skipped if `retinify` not installed |
+| `test_camera_stream.py` | `FileSource.stream()` count, type, and shape in directory mode |
+| `test_pipeline_integration.py` | Full `StereoPipeline.process()` with real calib + image pair (skipped if files absent) |
+| `test_retinify.py` | `retinify_adapter` unit tests + `RetinifyMatcher` (skipped if `retinify` not installed) |
 | `test_cli_preview.py` | CLI smoke test (no camera) |
-| `test_detect.py` | Additional detection tests |
 
 `retinify` is optional — tests that require it are guarded with `@pytest.mark.skipif(find_spec("retinify") is None, ...)`.
 

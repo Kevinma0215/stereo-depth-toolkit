@@ -1,5 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import Iterator
 import numpy as np
 
 from stereo_depth.entities import (
@@ -14,6 +15,11 @@ class ICameraSource(ABC):
     @abstractmethod
     def grab(self) -> FramePair:
         """Capture and return the next stereo frame pair."""
+        ...
+
+    @abstractmethod
+    def stream(self) -> Iterator[FramePair]:
+        """Yield FramePairs continuously until exhausted or KeyboardInterrupt."""
         ...
 
 
