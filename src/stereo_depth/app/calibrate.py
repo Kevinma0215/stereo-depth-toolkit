@@ -5,10 +5,10 @@ from dataclasses import asdict
 from pathlib import Path
 import json
 
-from stereo_depth.calib.boards import make_charuco_board
-from stereo_depth.calib.collect import collect_charuco_from_paths
-from stereo_depth.calib.stereo_calib import run_stereo_calibration
-from stereo_depth.config.io import save_yaml
+from stereo_depth.adapters.calibration.charuco_calibrator import (
+    make_charuco_board, collect_charuco_from_paths, run_stereo_calibration,
+)
+from stereo_depth.infrastructure.config.io import save_yaml
 
 
 def _list_images(folder: Path) -> list[Path]:

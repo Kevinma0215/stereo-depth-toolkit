@@ -3,9 +3,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from stereo_depth.config.io import load_yaml
-from stereo_depth.calib.rectify import build_rectify_maps, rectify_pair
-from stereo_depth.io.pairs import pair_images
+from stereo_depth.infrastructure.config.io import load_yaml
+from stereo_depth.adapters.calibration.charuco_calibrator import build_rectify_maps, rectify_pair
+from stereo_depth.infrastructure.io.pairs import pair_images
 
 def _draw_epipolar_lines(img: np.ndarray, step: int = 40):
     out = img.copy()

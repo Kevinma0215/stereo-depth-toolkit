@@ -5,8 +5,7 @@
 
 import numpy as np
 import cv2
-from stereo_depth.calib.boards import make_charuco_board
-from stereo_depth.calib.detect import detect_charuco
+from stereo_depth.adapters.calibration.charuco_calibrator import make_charuco_board, detect_charuco
 
 def test_detect_charuco_on_synth():
     board, dictionary = make_charuco_board(

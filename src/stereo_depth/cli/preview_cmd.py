@@ -2,10 +2,10 @@ from __future__ import annotations
 from pathlib import Path
 import typer
 
-from stereo_depth.io.sources import open_source
-from stereo_depth.io.sbs_capture import SBSSplitter
-from stereo_depth.io.sinks import VideoRecorder
-from stereo_depth.viz.preview import preview_sbs
+from stereo_depth.adapters.camera.uvc_source import open_source
+from stereo_depth.infrastructure.io.sbs_capture import SBSSplitter
+from stereo_depth.infrastructure.io.sinks import VideoRecorder
+from stereo_depth.infrastructure.viz.preview import preview_sbs
 
 def preview(
     device:  int = typer.Option(0, help="Camera device index"),

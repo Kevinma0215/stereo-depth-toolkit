@@ -4,3 +4,4 @@ data/
 *.avi
 *.mjpg
 *.png
+outputs/

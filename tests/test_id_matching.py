@@ -1,7 +1,7 @@
 """ 我們測 _match_ids_one_view 的「會挑出共同 ids」這件事，這是你原本最容易 silently fail 的地方。 """
 
 import numpy as np
-from stereo_depth.calib.stereo_calib import _match_ids_one_view
+from stereo_depth.adapters.calibration.charuco_calibrator import _match_ids_one_view
 
 def test_match_ids_one_view_basic():
     # 假造 corners: Nx1x2
