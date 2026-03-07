@@ -1,4 +1,4 @@
-name: CV
+name: cv
 channels:
   - conda-forge
   - defaults
