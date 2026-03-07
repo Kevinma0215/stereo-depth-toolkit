@@ -1,32 +1,30 @@
-# Camera Device Setup
+# Hardware Setup
 
-List video devices:
+Camera: HBVCAM-W202011HD (USB 2.0 UVC, no vendor SDK required).
 
+## Device Mapping
+
+| Device | Description |
+|--------|-------------|
+| `/dev/video0` | SBS stitched stereo stream (2560x720) |
+| `/dev/video2` | Left camera only |
+| `/dev/video3` | Right camera only |
+
+List available devices:
 ```bash
 ls -l /dev/video*
-````
+```
 
-Check formats:
-
+Check supported formats:
 ```bash
 sudo v4l2-ctl -d /dev/video0 --list-formats-ext
 ```
 
-## Expected mapping
-
-| Device      | Description       |
-| ----------- | ----------------- |
-| /dev/video0 | SBS stereo stream |
-| /dev/video2 | left camera       |
-| /dev/video3 | right camera      |
-
-Use `/dev/video0` for stereo processing.
-
 ---
 
-## Recommended mode
+## Recommended Mode
 
-Set MJPG for stable streaming:
+Set MJPEG format for stable streaming at 30 fps:
 
 ```bash
 sudo v4l2-ctl -d /dev/video0 \
@@ -34,3 +32,11 @@ sudo v4l2-ctl -d /dev/video0 \
 
 sudo v4l2-ctl -d /dev/video0 --set-parm=30
 ```
+
+---
+
+## Notes
+
+- Use `/dev/video0` for stereo processing (SBS split handled by `SBSSplitter`)
+- If left/right appear swapped, add `--swap-lr` to any CLI command
+- USB 2.0 bandwidth limits framerate at full 2560x720; MJPEG compression is required
