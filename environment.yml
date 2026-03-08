@@ -7,4 +7,7 @@ dependencies:
   - opencv
   - scipy
   - numpy
+  - pip
+  - pip:
+      - pytest
 prefix: /home/clm_ubuntu/miniconda3/envs/CV
