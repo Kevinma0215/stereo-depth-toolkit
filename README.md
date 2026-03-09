@@ -48,7 +48,12 @@ stereo-depth preview --video sbs_scene_10s_mjpg.avi
 ### 2. Collect calibration images
 
 ```bash
-stereo-depth collect --path /dev/video0
+# stereo-depth collect --path /dev/video0
+stereo-depth capture \
+    --out-dir data/calib/$(date +%Y-%m-%d)_run2\
+    --path /dev/video0 \
+    --width 2560 --height 720 --fps 30 \
+    --num-pairs 70
 ```
 
 Controls: `SPACE` to save a pair, `q` to quit. Collect 30–60 pairs from varied angles and distances (30–120 cm). Output saved to `calib_data/left/` and `calib_data/right/`.
@@ -59,8 +64,8 @@ Uses a ChArUco board (DICT_5X5_100, 0.03 m square, 0.022 m marker).
 
 ```bash
 stereo-depth calibrate \
-  --data data/calib/charuco_2026-02-14_run1 \
-  --out outputs/calib/calib.yaml \
+  --data data/calib/2026-03-08_run2 \
+  --out outputs/calib/0308_try4/calib.yaml \
   --square-length 0.03 \
   --marker-length 0.022 \
   --dict-name DICT_5X5_100 \
@@ -73,22 +78,34 @@ Target: RPE < 0.5 px. See [docs/calibration.md](docs/calibration.md) for tips an
 
 ```bash
 stereo-depth rectify \
-  --calib outputs/calib/calib.yaml \
-  --data data/calib/charuco_2026-02-14_run1 \
-  --out outputs/rectify_test \
+  --calib outputs/calib/0308_try4/calib.yaml \
+  --data data/calib/2026-03-08_run2 \
+  --out-dir outputs/rectify/0308_try4 \
   --preview
+# stereo-depth rectify \
+#   --calib outputs/calib/old_outputs/calib_strict.yaml \
+#   --data data/calib/2026-03-08_run1 \
+#   --out-dir outputs/rectify_test/0308_try2 \
+#   --preview
 ```
 
 ### 5. Single-frame depth estimation
 
 ```bash
+# stereo-depth depth \
+#   --calib outputs/calib/calib_strict.yaml \
+#   --left  data/calib_frames/left/left_00020.png \
+#   --right data/calib_frames/right/right_00020.png \
+#   --out outputs/depth/demo2 \
+#   --preset indoor \
+#   --matcher sgbm   # or: --matcher retinify
 stereo-depth depth \
-  --calib outputs/calib/calib_strict.yaml \
-  --left  data/calib/charuco_2026-02-14_run1/left/000000.png \
-  --right data/calib/charuco_2026-02-14_run1/right/000000.png \
-  --out outputs/depth/demo \
+  --calib outputs/calib/0308_try4/calib.yaml \
+  --left  data/calib/2026-03-08_run2/left/0035.png \
+  --right data/calib/2026-03-08_run2/right/0035.png \
+  --out outputs/depth/0308_try2 \
   --preset indoor \
-  --matcher sgbm   # or: --matcher retinify
+  --matcher sgbm
 ```
 
 Outputs: `disparity.npy`, `depth_m.npy`, `disparity.png`, `left_rect.png`, `right_rect.png`
@@ -96,7 +113,19 @@ Outputs: `disparity.npy`, `depth_m.npy`, `disparity.png`, `left_rect.png`, `righ
 ### 6. Live depth stream
 
 ```bash
-stereo-depth stream --calib outputs/calib/calib_strict.yaml
+stereo-depth stream --calib outputs/calib/0308_try4/calib.yaml --fill-holes --fill-radius 5
+```
+
+### 7. Aggregator test
+```bash
+python tools/tune_sgbm.py --left data/calib_frames/left/left_00020.png --right data/calib_frames/right/right_00020.png --calib outputs/calib/calib_strict.yaml
+```
+
+```
+python tools/eval_depth_accuracy.py \
+  --calib outputs/calib/0308_try4/calib.yaml \
+  --preset indoor \
+  --frames 10
 ```
 
 ---
@@ -157,3 +186,5 @@ Convert MP4 to AVI (MJPEG, for replay compatibility):
 ```bash
 ffmpeg -y -i sbs_scene_10s.mp4 -c:v mjpeg -q:v 3 -an sbs_scene_10s_mjpg.avi
 ```
+Add post-processing stage to the stereo pipeline following @docs/architecture.md
+Use @docs/post_processor_reference.py as the implementation reference.

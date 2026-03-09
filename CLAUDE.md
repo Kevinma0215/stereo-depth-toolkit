@@ -23,7 +23,7 @@ pytest
 
 # CLI
 stereo-depth preview   --path /dev/video0 --width 2560 --height 720 --fps 30
-stereo-depth collect   --path /dev/video0
+stereo-depth capture   --out-dir data/calib/$(date +%Y-%m-%d)_run1 --path /dev/video0
 stereo-depth calibrate --data data/calib/charuco_2026-02-14_run1 --out outputs/calib/calib.yaml \
   --square-length 0.03 --marker-length 0.022 --dict-name DICT_5X5_100 --min-views 10
 stereo-depth rectify   --calib outputs/calib/calib.yaml --data data/calib/charuco_2026-02-14_run1 \

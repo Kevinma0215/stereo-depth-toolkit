@@ -16,7 +16,8 @@ src/stereo_depth/
 │
 ├── use_cases/              # Layer 2 — abstract ports + pipeline
 │   ├── ports.py            # ABCs: ICameraSource, ICalibrationRepo,
-│   │                       #       IRectifier, IDisparityMatcher, IDepthEstimator
+│   │                       #       IRectifier, IDisparityMatcher, IDepthEstimator,
+│   │                       #       IPostProcessor
 │   └── pipeline.py         # StereoPipeline: process() + stream()
 │
 ├── adapters/               # Layer 3 — concrete implementations of ports.py
@@ -33,8 +34,11 @@ src/stereo_depth/
 │   │   ├── sgbm_matcher.py        # IDisparityMatcher — OpenCV SGBM (CPU)
 │   │   ├── sgbm_presets.py        # SGBMPreset dataclass + preset() factory
 │   │   └── retinify_matcher.py    # IDisparityMatcher — Retinify TensorRT (GPU)
-│   └── depth/
-│       └── opencv_depth_estimator.py  # IDepthEstimator via cv2.reprojectImageTo3D
+│   ├── depth/
+│   │   └── opencv_depth_estimator.py  # IDepthEstimator via cv2.reprojectImageTo3D
+│   └── post_processor/
+│       ├── identity_post_processor.py # IPostProcessor — pass-through (no-op)
+│       └── hole_fill_post_processor.py # IPostProcessor — cv2.inpaint INPAINT_NS
 │
 ├── app/                    # Layer 4 — orchestrates adapters per command
 │   ├── calibrate.py        # run_calibrate_charuco_stereo()
@@ -112,6 +116,9 @@ class IDisparityMatcher(ABC):
 class IDepthEstimator(ABC):
     def to_depth(self, disparity: np.ndarray, calib: CalibrationResult) -> DepthMap: ...
 
+class IPostProcessor(ABC):
+    def process(self, depth_map: DepthMap) -> DepthMap: ...
+
 class ICameraSource(ABC):
     def grab(self) -> FramePair: ...
     def stream(self) -> Iterator[FramePair]: ...
@@ -136,6 +143,8 @@ ICameraSource.grab()
                           └─> disparity float32 (H, W)
                                 └─> IDepthEstimator.to_depth()
                                       └─> DepthMap (data, disparity, left_rect, right_rect)
+                                            └─> IPostProcessor.process()  [×N, optional]
+                                                  └─> DepthMap
 ```
 
 ### Continuous stream (`StereoPipeline.stream()`)
