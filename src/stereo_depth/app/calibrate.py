@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 
 from stereo_depth.adapters.calibration.charuco_calibrator import (
-    make_charuco_board, collect_charuco_from_paths, run_stereo_calibration,
+    make_charuco_board, collect_charuco_paired, run_stereo_calibration,
 )
 from stereo_depth.infrastructure.config.io import save_yaml
 
@@ -78,12 +78,12 @@ def run_calibrate_charuco_stereo(
         report_json.write_text(json.dumps(report, indent=2), encoding="utf-8")
         raise RuntimeError(f"No images found. See report: {report_json}")
 
-    # 這裡不強制 left/right 數量相等：先各自收集，再用 paired ok 數量決定
-    l_corners, l_ids, img_size, l_report = collect_charuco_from_paths(
-        left_paths, board, dictionary, min_markers=min_markers, min_charuco=min_charuco
-    )
-    r_corners, r_ids, _, r_report = collect_charuco_from_paths(
-        right_paths, board, dictionary, min_markers=min_markers, min_charuco=min_charuco
+    # Detect corners from paired images: only keep a view when BOTH sides succeed,
+    # guaranteeing l_corners[i] and r_corners[i] always correspond to the same
+    # physical board position.
+    l_corners, l_ids, r_corners, r_ids, img_size, l_report, r_report = collect_charuco_paired(
+        left_paths, right_paths, board, dictionary,
+        min_markers=min_markers, min_charuco=min_charuco,
     )
 
     if report_json is None:

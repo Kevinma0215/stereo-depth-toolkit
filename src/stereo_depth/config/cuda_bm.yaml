@@ -1,0 +1,11 @@
+# Default parameters for CudaBmMatcher.
+# Equivalent to the pipeline.yaml  type: cuda_bm  block in the architecture doc.
+#
+# num_disparities: must be divisible by 16
+# block_size:      must be odd, in range 5–31
+# prefilter_cap:   Sobel pre-filter truncation value
+
+type: cuda_bm
+num_disparities: 64
+block_size: 15
+prefilter_cap: 31

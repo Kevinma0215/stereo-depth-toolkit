@@ -30,8 +30,13 @@ def _build_matcher(matcher_name: str, preset_name: str, image_size: tuple[int, i
         from stereo_depth.adapters.matcher.retinify_matcher import RetinifyMatcher  # noqa: PLC0415
         w, h = image_size
         return RetinifyMatcher(width=w, height=h, mode=preset_name)
+    if matcher_name == "cuda_bm":
+        # Lazy import: cuda_bm_matcher raises ImportError at module level when
+        # OpenCV CUDA support is absent, so we defer the import to call time.
+        from stereo_depth.adapters.matcher.cuda_bm_matcher import CudaBmMatcher  # noqa: PLC0415
+        return CudaBmMatcher()
     raise ValueError(
-        f"Unknown matcher '{matcher_name}'. Valid options: sgbm | retinify"
+        f"Unknown matcher '{matcher_name}'. Valid options: sgbm | retinify | cuda_bm"
     )
 
 

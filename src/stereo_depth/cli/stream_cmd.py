@@ -18,6 +18,8 @@ def stream(
     ),
     width: int = typer.Option(2560, help="Capture frame width in pixels"),
     height: int = typer.Option(720, help="Capture frame height in pixels"),
+    fill_holes: bool = typer.Option(False, help="Inpaint NaN depth holes (INPAINT_NS)"),
+    fill_radius: int = typer.Option(3, help="Inpainting neighbourhood radius in pixels"),
 ):
     """Live stereo depth stream: left-rect | disparity | depth colourmap.
 
@@ -30,4 +32,6 @@ def stream(
         matcher_name=matcher,
         width=width,
         height=height,
+        fill_holes=fill_holes,
+        fill_radius=fill_radius,
     )

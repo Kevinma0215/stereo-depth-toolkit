@@ -162,6 +162,113 @@ def collect_charuco_from_paths(
     return all_corners, all_ids, img_size, report
 
 
+def collect_charuco_paired(
+    left_paths: list[Path],
+    right_paths: list[Path],
+    board,
+    dictionary,
+    *,
+    min_markers: int = 4,
+    min_charuco: int = 10,
+) -> tuple[
+    list[np.ndarray], list[np.ndarray],   # l_corners, l_ids
+    list[np.ndarray], list[np.ndarray],   # r_corners, r_ids
+    tuple[int, int],                       # img_size
+    "CollectReport", "CollectReport",      # l_report, r_report
+]:
+    """Detect ChArUco corners from paired left/right image lists.
+
+    Unlike calling ``collect_charuco_from_paths`` independently for each side,
+    this function processes images index-by-index and only keeps a view when
+    **both** the left and right images yield a valid detection.  This guarantees
+    that ``l_corners[i]`` and ``r_corners[i]`` always correspond to the same
+    physical board position, which is required for correct stereo calibration.
+    """
+    assert len(left_paths) == len(right_paths), (
+        f"left/right path lists must have the same length "
+        f"({len(left_paths)} vs {len(right_paths)})"
+    )
+
+    l_corners: list[np.ndarray] = []
+    l_ids:     list[np.ndarray] = []
+    r_corners: list[np.ndarray] = []
+    r_ids:     list[np.ndarray] = []
+    img_size:  tuple[int, int] | None = None
+
+    def _empty_stats() -> dict:
+        return {
+            "total": 0, "ok": 0,
+            "no_markers": 0, "too_few_markers": 0, "too_few_charuco": 0,
+            "min_charuco": 10**9, "max_charuco": 0,
+        }
+
+    ls, rs = _empty_stats(), _empty_stats()
+
+    for lp, rp in zip(left_paths, right_paths):
+        ls["total"] += 1
+        rs["total"] += 1
+
+        limg = cv2.imread(str(lp))
+        rimg = cv2.imread(str(rp))
+
+        if limg is None:
+            ls["no_markers"] += 1
+            rs["no_markers"] += 1
+            continue
+        if rimg is None:
+            ls["no_markers"] += 1
+            rs["no_markers"] += 1
+            continue
+
+        if img_size is None:
+            h, w = limg.shape[:2]
+            img_size = (w, h)
+
+        lgray = cv2.cvtColor(limg, cv2.COLOR_BGR2GRAY)
+        rgray = cv2.cvtColor(rimg, cv2.COLOR_BGR2GRAY)
+
+        ldet = detect_charuco(lgray, board, dictionary,
+                               min_markers=min_markers, min_charuco=min_charuco)
+        rdet = detect_charuco(rgray, board, dictionary,
+                               min_markers=min_markers, min_charuco=min_charuco)
+
+        for det, st in ((ldet, ls), (rdet, rs)):
+            st["min_charuco"] = min(st["min_charuco"], det.num_charuco)
+            st["max_charuco"] = max(st["max_charuco"], det.num_charuco)
+
+        if not ldet.ok:
+            ls[ldet.reason or "no_markers"] += 1
+            rs[rdet.reason or "no_markers"] += 1 if not rdet.ok else 0
+            continue
+        if not rdet.ok:
+            rs[rdet.reason or "no_markers"] += 1
+            continue
+
+        # Both sides valid — keep as a matched pair
+        l_corners.append(ldet.corners)   # type: ignore[arg-type]
+        l_ids.append(ldet.ids)            # type: ignore[arg-type]
+        r_corners.append(rdet.corners)   # type: ignore[arg-type]
+        r_ids.append(rdet.ids)            # type: ignore[arg-type]
+        ls["ok"] += 1
+        rs["ok"] += 1
+
+    if img_size is None:
+        img_size = (0, 0)
+
+    def _make_report(st: dict) -> CollectReport:
+        return CollectReport(
+            total=st["total"],
+            ok=st["ok"],
+            fail_no_markers=st["no_markers"],
+            fail_too_few_markers=st["too_few_markers"],
+            fail_too_few_charuco=st["too_few_charuco"],
+            min_charuco_seen=(0 if st["min_charuco"] == 10**9 else st["min_charuco"]),
+            max_charuco_seen=st["max_charuco"],
+        )
+
+    return l_corners, l_ids, r_corners, r_ids, img_size, _make_report(ls), _make_report(rs)
+
+
 # ---------------------------------------------------------------------------
 # Stereo calibration math  (from calib/stereo_calib.py)
 # ---------------------------------------------------------------------------

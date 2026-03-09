@@ -62,3 +62,14 @@ class IDepthEstimator(ABC):
     def to_depth(self, disparity: np.ndarray, calib: CalibrationResult) -> DepthMap:
         """Convert a disparity map to a metric DepthMap using the Q matrix."""
         ...
+
+
+class IPostProcessor(ABC):
+    @abstractmethod
+    def process(self, depth_map: DepthMap) -> DepthMap:
+        """Apply post-processing to a DepthMap and return the result.
+
+        Implementations must not modify the input in-place; return a new
+        DepthMap (or the same object if no changes were made).
+        """
+        ...
