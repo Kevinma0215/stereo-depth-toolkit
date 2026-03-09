@@ -27,6 +27,7 @@ from stereo_depth.adapters.depth.opencv_depth_estimator import OpenCVDepthEstima
 from stereo_depth.adapters.matcher.sgbm_matcher import SgbmMatcher
 from stereo_depth.adapters.rectifier.opencv_rectifier import OpenCVRectifier
 from stereo_depth.entities.frame import FramePair
+from stereo_depth.infrastructure.depth_aggregator import DepthAggregator
 
 
 def parse_args() -> argparse.Namespace:
@@ -196,6 +197,16 @@ def run(args: argparse.Namespace) -> None:
     depth = estimator.to_depth(disp, calib)
     total_ms = rect_ms + sgbm_ms + wls_ms
 
+    # --- Depth Aggregator setup ---
+    _BUFFER_SIZE = 10
+    # Hardcoded test waypoints in rectified-image pixel coordinates (u, v)
+    _WAYPOINTS = [
+        (rect.left.shape[1] // 2,       rect.left.shape[0] // 2),  # centre
+        (rect.left.shape[1] // 4,       rect.left.shape[0] // 2),  # left-centre
+        (3 * rect.left.shape[1] // 4,   rect.left.shape[0] // 2),  # right-centre
+    ]
+    aggregator = DepthAggregator(calib, buffer_size=_BUFFER_SIZE, min_confidence=0.5)
+
     # --- Stats ---
     depth_data = depth.data
     valid_mask = np.isfinite(depth_data) & (depth_data > 0)
@@ -257,9 +268,43 @@ def run(args: argparse.Namespace) -> None:
     # --- Show window ---
     win = "SGBM Tuner  [Q=quit  S=save]"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
-    cv2.imshow(win, panel)
 
+    frame_count = 0
     while True:
+        # Accumulate the current disparity into the aggregator each iteration
+        aggregator.push(disp)
+        frame_count += 1
+
+        display_panel = panel.copy()
+
+        # Overlay waypoints on left-rect panel once buffer is full
+        if aggregator.stats().buffer_fill == _BUFFER_SIZE:
+            results = aggregator.query(_WAYPOINTS)
+            for wp in results:
+                u, v = wp.pixel
+                color = (0, 255, 0)
+                cv2.circle(display_panel, (u, v), 6, color, 2)
+                if wp.xyz_m is not None:
+                    label = f"{wp.xyz_m[2]:.2f}m {wp.confidence * 100:.0f}%"
+                else:
+                    label = f"N/A {wp.confidence:.2f}"
+                cv2.putText(
+                    display_panel, label, (u + 8, v - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA,
+                )
+
+        # Print AggregatorStats every 30 frames
+        if frame_count % 30 == 0:
+            s = aggregator.stats()
+            print(
+                f"[DepthAggregator] fill={s.buffer_fill}/{_BUFFER_SIZE}  "
+                f"mean_conf={s.mean_confidence:.2f}  "
+                f"query_lat={s.query_latency_ms:.1f} ms  "
+                f"push_lat={s.push_latency_ms:.2f} ms"
+            )
+
+        cv2.imshow(win, display_panel)
+
         key = cv2.waitKey(30) & 0xFF
         if key in (ord("q"), ord("Q"), 27):   # Q or Esc
             break
@@ -270,7 +315,7 @@ def run(args: argparse.Namespace) -> None:
             cv2.imwrite(str(out_dir / "left_rect.png"),  left_rect_bgr)
             cv2.imwrite(str(out_dir / "disparity.png"),  disp_color)
             cv2.imwrite(str(out_dir / "depth.png"),      depth_color)
-            cv2.imwrite(str(out_dir / "panel.png"),      panel)
+            cv2.imwrite(str(out_dir / "panel.png"),      display_panel)
             print(f"Saved panels to {out_dir}/")
 
     cv2.destroyAllWindows()

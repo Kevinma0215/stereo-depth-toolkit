@@ -1,38 +1,40 @@
 indoor:
   min_disparity: 0
-  num_disparities: 128  # halved from 256; robot arm at ~0.5 m needs ~60px max disp (baseline*focal/min_depth); multiple of 16; ~2x faster
-  block_size: 5         # reduced from 7; smaller block is faster and reduces over-smoothing on edges
-  p1: 600               # smoothness penalty for 1-pixel disparity change; kept stable across block_size change
-  p2: 2400              # smoothness penalty for >1-pixel change; = 4*p1, satisfies p2 > p1 constraint
-  disp12_max_diff: 3    # relaxed from 2; main cause of holes on flat surfaces — looser L-R consistency = more coverage
-  pre_filter_cap: 31    # clamps Sobel response before matching; higher = more robust to brightness
-  uniqueness_ratio: 8   # reduced from 10; less aggressive rejection fills low-texture walls/desk
-  speckle_window_size: 200  # larger window removes more isolated noise blobs
-  speckle_range: 3      # allow slightly more disparity variation within a speckle component
-  mode: SGBM            # 5-direction scan (not HH); ~2x faster than HH which does full 8-direction
+  num_disparities: 112  # calib 0308_try4: f=641 px, B=60.6 mm, f·B=38.85 px·m
+                        # covers min depth 38.85/112 = 0.35 m (robot arm 0.35–2 m)
+                        # disp at 0.5 m ≈ 78 px, at 1.0 m ≈ 39 px
+  block_size: 5         # small block: faster, preserves edges at close range
+  p1: 600               # smoothness penalty for 1-pixel disparity change
+  p2: 2400              # smoothness penalty for >1-pixel change; = 4*p1
+  disp12_max_diff: 3    # relaxed L-R consistency: more coverage on flat surfaces
+  pre_filter_cap: 31    # Sobel clamp; robust to brightness variation
+  uniqueness_ratio: 6   # permissive: fills low-texture walls/desk
+  speckle_window_size: 200
+  speckle_range: 9
+  mode: SGBM            # 5-direction scan; ~2x faster than HH
 
 outdoor:
   min_disparity: 0
-  num_disparities: 192  # must be divisible by 16
-  block_size: 5         # smaller block for finer outdoor detail
-  p1: 600               # smoothness penalty for 1-pixel disparity change
-  p2: 2400              # smoothness penalty for >1-pixel change; must be > p1
+  num_disparities: 144  # calib 0308_try4: covers min depth 38.85/144 = 0.27 m
+  block_size: 5
+  p1: 600
+  p2: 2400
   disp12_max_diff: 1
   pre_filter_cap: 31
-  uniqueness_ratio: 12  # slightly lower = more matches in low-texture outdoor scenes
+  uniqueness_ratio: 12
   speckle_window_size: 200
   speckle_range: 3
   mode: SGBM
 
 high_quality:
   min_disparity: 0
-  num_disparities: 160  # must be divisible by 16
+  num_disparities: 128  # calib 0308_try4: covers min depth 38.85/128 = 0.30 m
   block_size: 7
-  p1: 1176              # smoothness penalty for 1-pixel disparity change (8 * channels * block_size^2)
-  p2: 4704              # smoothness penalty for >1-pixel change; must be > p1 (32 * channels * block_size^2)
+  p1: 1176              # 8 * 1 * block_size^2 = 8 * 49
+  p2: 4704              # 32 * 1 * block_size^2 = 32 * 49
   disp12_max_diff: 1
   pre_filter_cap: 31
-  uniqueness_ratio: 8   # lower = more permissive; paired with HH mode for better coverage
+  uniqueness_ratio: 8
   speckle_window_size: 150
-  speckle_range: 2      # tighter speckle suppression
-  mode: HH              # 8-direction semi-global; slower but more accurate than SGBM
+  speckle_range: 2
+  mode: HH              # 8-direction semi-global; slower but more accurate
