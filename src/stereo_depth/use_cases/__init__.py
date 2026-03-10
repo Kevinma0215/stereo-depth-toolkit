@@ -5,6 +5,7 @@ from .ports import (
     IDisparityMatcher,
     IDepthEstimator,
 )
+from .pipeline import StereoPipeline
 
 __all__ = [
     "ICameraSource",
@@ -12,4 +13,5 @@ __all__ = [
     "IRectifier",
     "IDisparityMatcher",
     "IDepthEstimator",
+    "StereoPipeline",
 ]
