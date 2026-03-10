@@ -65,11 +65,12 @@ Uses a ChArUco board (DICT_5X5_100, 0.03 m square, 0.022 m marker).
 ```bash
 stereo-depth calibrate \
   --data data/calib/2026-03-08_run2 \
-  --out outputs/calib/0308_try4/calib.yaml \
+  --out outputs/calib/0308_try5/calib.yaml \
   --square-length 0.03 \
   --marker-length 0.022 \
   --dict-name DICT_5X5_100 \
   --min-views 10
+  --per-image-rpe # optional for image selection
 ```
 
 Target: RPE < 0.5 px. See [docs/calibration.md](docs/calibration.md) for tips and YAML schema.
@@ -82,23 +83,11 @@ stereo-depth rectify \
   --data data/calib/2026-03-08_run2 \
   --out-dir outputs/rectify/0308_try4 \
   --preview
-# stereo-depth rectify \
-#   --calib outputs/calib/old_outputs/calib_strict.yaml \
-#   --data data/calib/2026-03-08_run1 \
-#   --out-dir outputs/rectify_test/0308_try2 \
-#   --preview
 ```
 
 ### 5. Single-frame depth estimation
 
 ```bash
-# stereo-depth depth \
-#   --calib outputs/calib/calib_strict.yaml \
-#   --left  data/calib_frames/left/left_00020.png \
-#   --right data/calib_frames/right/right_00020.png \
-#   --out outputs/depth/demo2 \
-#   --preset indoor \
-#   --matcher sgbm   # or: --matcher retinify
 stereo-depth depth \
   --calib outputs/calib/0308_try4/calib.yaml \
   --left  data/calib/2026-03-08_run2/left/0035.png \
@@ -113,7 +102,7 @@ Outputs: `disparity.npy`, `depth_m.npy`, `disparity.png`, `left_rect.png`, `righ
 ### 6. Live depth stream
 
 ```bash
-stereo-depth stream --calib outputs/calib/0308_try4/calib.yaml --fill-holes --fill-radius 5
+stereo-depth stream --calib outputs/calib/calib.yaml --fill-holes --fill-radius 5
 ```
 
 ### 7. Aggregator test

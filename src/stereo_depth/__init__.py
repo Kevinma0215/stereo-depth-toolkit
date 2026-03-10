@@ -19,6 +19,9 @@ from stereo_depth.use_cases import (
     StereoPipeline,
 )
 
+# Rolling buffer
+from stereo_depth.rolling_buffer import RollingBuffer
+
 # Calibration evaluation
 from stereo_depth.adapters.calibration import (
     CalibrationEvaluation,
@@ -42,4 +45,6 @@ __all__ = [
     # calibration evaluation
     "CalibrationEvaluation",
     "evaluate_calibration",
+    # rolling buffer
+    "RollingBuffer",
 ]
