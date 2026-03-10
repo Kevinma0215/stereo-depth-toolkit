@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/stereo_depth/__init__.py
+src/stereo_depth/rolling_buffer.py
 src/stereo_depth/adapters/__init__.py
 src/stereo_depth/adapters/calibration/__init__.py
 src/stereo_depth/adapters/calibration/charuco_calibrator.py
@@ -78,3 +79,4 @@ tests/test_post_processor.py
 tests/test_process_stack.py
 tests/test_rectify.py
 tests/test_retinify.py
+tests/test_rolling_buffer.py

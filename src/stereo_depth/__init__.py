@@ -22,6 +22,9 @@ from stereo_depth.use_cases import (
 # Rolling buffer
 from stereo_depth.rolling_buffer import RollingBuffer
 
+# Camera streamer
+from stereo_depth.camera_streamer import CameraStreamer, SnapshotResult, NotReadyError
+
 # Calibration evaluation
 from stereo_depth.adapters.calibration import (
     CalibrationEvaluation,
@@ -47,4 +50,8 @@ __all__ = [
     "evaluate_calibration",
     # rolling buffer
     "RollingBuffer",
+    # camera streamer
+    "CameraStreamer",
+    "SnapshotResult",
+    "NotReadyError",
 ]
