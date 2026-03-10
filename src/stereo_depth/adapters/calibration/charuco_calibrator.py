@@ -59,25 +59,34 @@ def detect_charuco(
     aruco = cv2.aruco
     h, w = gray.shape[:2]
 
-    if hasattr(aruco, "ArucoDetector"):
-        detector = aruco.ArucoDetector(dictionary)
-        marker_corners, marker_ids, _ = detector.detectMarkers(gray)
+    tuple_ver = tuple(int(x) for x in cv2.__version__.split(".")[:2])
+    if tuple_ver >= (4, 8):
+        charuco_detector = aruco.CharucoDetector(board)
+        ch_corners, ch_ids, marker_corners, marker_ids = charuco_detector.detectBoard(gray)
+        num = 0 if ch_corners is None else len(ch_corners)
     else:
-        marker_corners, marker_ids, _ = aruco.detectMarkers(gray, dictionary)
+        if hasattr(aruco, "ArucoDetector"):
+            detector = aruco.ArucoDetector(dictionary)
+            marker_corners, marker_ids, _ = detector.detectMarkers(gray)
+        else:
+            marker_corners, marker_ids, _ = aruco.detectMarkers(gray, dictionary)
+
+        if marker_ids is None:
+            return CharucoDetection(False, 0, 0, None, None, (w, h), "no_markers")
+
+        ret = aruco.interpolateCornersCharuco(
+            markerCorners=marker_corners,
+            markerIds=marker_ids,
+            image=gray,
+            board=board,
+        )
+        num, ch_corners, ch_ids = ret
 
     if marker_ids is None:
         return CharucoDetection(False, 0, 0, None, None, (w, h), "no_markers")
 
     if len(marker_ids) < min_markers:
         return CharucoDetection(False, int(len(marker_ids)), 0, None, None, (w, h), "too_few_markers")
-
-    ret = aruco.interpolateCornersCharuco(
-        markerCorners=marker_corners,
-        markerIds=marker_ids,
-        image=gray,
-        board=board,
-    )
-    num, ch_corners, ch_ids = ret
 
     if num is None or int(num) < min_charuco or ch_corners is None or ch_ids is None:
         return CharucoDetection(
@@ -317,6 +326,38 @@ def _match_ids_one_view(lc, li, rc, ri, chess_corners_3d, min_common: int = 10):
     return obj, ptsL, ptsR
 
 
+def _calibrate_camera_charuco_new(
+    charuco_corners: list,
+    charuco_ids: list,
+    board,
+    img_size: tuple[int, int],
+    flags: int,
+    crit,
+) -> tuple:
+    """OpenCV >= 4.8 replacement for aruco.calibrateCameraCharuco.
+
+    Uses ``board.matchImagePoints`` to derive ``(objPoints, imgPoints)`` per
+    view, then calls ``cv2.calibrateCamera``.  Returns ``(rms, K, D)`` — the
+    same leading values that ``calibrateCameraCharuco`` returned.
+    """
+    obj_pts_list: list[np.ndarray] = []
+    img_pts_list: list[np.ndarray] = []
+    for corners, ids in zip(charuco_corners, charuco_ids):
+        obj_pts, img_pts = board.matchImagePoints(corners, ids)
+        if obj_pts is not None and len(obj_pts) >= 4:
+            obj_pts_list.append(obj_pts.astype(np.float32))
+            img_pts_list.append(img_pts.astype(np.float32))
+
+    if not obj_pts_list:
+        raise RuntimeError("calibrateCameraCharuco: no usable views after matchImagePoints")
+
+    rms, K, D, *_ = cv2.calibrateCamera(
+        obj_pts_list, img_pts_list, img_size,
+        None, None, flags=flags, criteria=crit,
+    )
+    return rms, K, D
+
+
 def run_stereo_calibration(
     l_corners,
     l_ids,
@@ -343,14 +384,19 @@ def run_stereo_calibration(
     flags = 0
     crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
 
-    retL, K1, D1, *_ = aruco.calibrateCameraCharuco(
-        charucoCorners=l_corners, charucoIds=l_ids, board=board, imageSize=img_size,
-        cameraMatrix=None, distCoeffs=None, flags=flags, criteria=crit,
-    )
-    retR, K2, D2, *_ = aruco.calibrateCameraCharuco(
-        charucoCorners=r_corners, charucoIds=r_ids, board=board, imageSize=img_size,
-        cameraMatrix=None, distCoeffs=None, flags=flags, criteria=crit,
-    )
+    tuple_ver = tuple(int(x) for x in cv2.__version__.split(".")[:2])
+    if tuple_ver >= (4, 8):
+        retL, K1, D1 = _calibrate_camera_charuco_new(l_corners, l_ids, board, img_size, flags, crit)
+        retR, K2, D2 = _calibrate_camera_charuco_new(r_corners, r_ids, board, img_size, flags, crit)
+    else:
+        retL, K1, D1, *_ = aruco.calibrateCameraCharuco(
+            charucoCorners=l_corners, charucoIds=l_ids, board=board, imageSize=img_size,
+            cameraMatrix=None, distCoeffs=None, flags=flags, criteria=crit,
+        )
+        retR, K2, D2, *_ = aruco.calibrateCameraCharuco(
+            charucoCorners=r_corners, charucoIds=r_ids, board=board, imageSize=img_size,
+            cameraMatrix=None, distCoeffs=None, flags=flags, criteria=crit,
+        )
 
     stereo_flags = cv2.CALIB_FIX_INTRINSIC
     chess_corners_3d = board.getChessboardCorners()
