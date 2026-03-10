@@ -175,6 +175,7 @@ def collect_charuco_paired(
     list[np.ndarray], list[np.ndarray],   # r_corners, r_ids
     tuple[int, int],                       # img_size
     "CollectReport", "CollectReport",      # l_report, r_report
+    list[str],                             # matched_left_names
 ]:
     """Detect ChArUco corners from paired left/right image lists.
 
@@ -189,11 +190,12 @@ def collect_charuco_paired(
         f"({len(left_paths)} vs {len(right_paths)})"
     )
 
-    l_corners: list[np.ndarray] = []
-    l_ids:     list[np.ndarray] = []
-    r_corners: list[np.ndarray] = []
-    r_ids:     list[np.ndarray] = []
-    img_size:  tuple[int, int] | None = None
+    l_corners:          list[np.ndarray] = []
+    l_ids:              list[np.ndarray] = []
+    r_corners:          list[np.ndarray] = []
+    r_ids:              list[np.ndarray] = []
+    matched_left_names: list[str]        = []
+    img_size:           tuple[int, int] | None = None
 
     def _empty_stats() -> dict:
         return {
@@ -249,6 +251,7 @@ def collect_charuco_paired(
         l_ids.append(ldet.ids)            # type: ignore[arg-type]
         r_corners.append(rdet.corners)   # type: ignore[arg-type]
         r_ids.append(rdet.ids)            # type: ignore[arg-type]
+        matched_left_names.append(lp.name)
         ls["ok"] += 1
         rs["ok"] += 1
 
@@ -266,7 +269,7 @@ def collect_charuco_paired(
             max_charuco_seen=st["max_charuco"],
         )
 
-    return l_corners, l_ids, r_corners, r_ids, img_size, _make_report(ls), _make_report(rs)
+    return l_corners, l_ids, r_corners, r_ids, img_size, _make_report(ls), _make_report(rs), matched_left_names
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +407,68 @@ def run_stereo_calibration(
         used_views=n,
         matched_views=len(objpoints),
     )
+
+
+# ---------------------------------------------------------------------------
+# Per-image reprojection error
+# ---------------------------------------------------------------------------
+
+def compute_per_image_rpe(
+    objpoints:   list[np.ndarray],
+    imgpointsL:  list[np.ndarray],
+    imgpointsR:  list[np.ndarray],
+    K1: np.ndarray,
+    D1: np.ndarray,
+    K2: np.ndarray,
+    D2: np.ndarray,
+    R:  np.ndarray,
+    T:  np.ndarray,
+) -> list[float]:
+    """Return per-view combined stereo RMS reprojection error (pixels).
+
+    For each view *i*:
+    1. ``cv2.solvePnP(objpoints[i], imgpointsL[i], K1, D1)`` → left-camera pose
+    2. Project ``objpoints[i]`` into the left camera → compare with ``imgpointsL[i]``
+    3. Compose the left pose with the stereo (R, T) to get the right-camera pose
+    4. Project into the right camera → compare with ``imgpointsR[i]``
+    5. Combined RMS = sqrt(mean of all squared pixel errors for both cameras)
+
+    Returns a list of floats, one per view in the same order as *objpoints*.
+    """
+    K1 = np.asarray(K1, dtype=np.float64)
+    D1 = np.asarray(D1, dtype=np.float64)
+    K2 = np.asarray(K2, dtype=np.float64)
+    D2 = np.asarray(D2, dtype=np.float64)
+    R  = np.asarray(R,  dtype=np.float64)
+    T  = np.asarray(T,  dtype=np.float64).reshape(3, 1)
+
+    rpes: list[float] = []
+    for obj, ptsL, ptsR in zip(objpoints, imgpointsL, imgpointsR):
+        obj  = obj.reshape(-1, 1, 3).astype(np.float64)
+        ptsL = ptsL.reshape(-1, 2).astype(np.float64)
+        ptsR = ptsR.reshape(-1, 2).astype(np.float64)
+
+        ok, rvec, tvec = cv2.solvePnP(obj, ptsL.reshape(-1, 1, 2), K1, D1)
+        if not ok:
+            rpes.append(float("nan"))
+            continue
+
+        proj_L, _ = cv2.projectPoints(obj, rvec, tvec, K1, D1)
+        proj_L = proj_L.reshape(-1, 2)
+
+        R_left, _ = cv2.Rodrigues(rvec)
+        R_right   = R @ R_left
+        T_right   = R @ tvec.reshape(3, 1) + T
+        rvec_R, _ = cv2.Rodrigues(R_right)
+
+        proj_R, _ = cv2.projectPoints(obj, rvec_R, T_right, K2, D2)
+        proj_R = proj_R.reshape(-1, 2)
+
+        err_L = np.linalg.norm(proj_L - ptsL, axis=1)
+        err_R = np.linalg.norm(proj_R - ptsR, axis=1)
+        rpes.append(float(np.sqrt(np.mean(np.concatenate([err_L ** 2, err_R ** 2])))))
+
+    return rpes
 
 
 # ---------------------------------------------------------------------------

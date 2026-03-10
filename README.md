@@ -121,11 +121,17 @@ stereo-depth stream --calib outputs/calib/0308_try4/calib.yaml --fill-holes --fi
 python tools/tune_sgbm.py --left data/calib_frames/left/left_00020.png --right data/calib_frames/right/right_00020.png --calib outputs/calib/calib_strict.yaml
 ```
 
-```
-python tools/eval_depth_accuracy.py \
-  --calib outputs/calib/0308_try4/calib.yaml \
-  --preset indoor \
-  --frames 10
+### 8. Evaluate Depth Accuracy
+```bash
+# 1. capture at each distance
+python tools/capture_accuracy_seq.py --distance 0.20 --frames 30
+python tools/capture_accuracy_seq.py --distance 0.30 --frames 30
+python tools/capture_accuracy_seq.py --distance 0.40 --frames 30
+python tools/capture_accuracy_seq.py --distance 0.50 --frames 30
+python tools/capture_accuracy_seq.py --distance 0.60 --frames 30
+
+# 2. evaluate all at once
+python tools/evaluate_depth.py --all
 ```
 
 ---

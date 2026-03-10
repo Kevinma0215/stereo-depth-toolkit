@@ -5,8 +5,11 @@ from dataclasses import asdict
 from pathlib import Path
 import json
 
+import numpy as np
+
 from stereo_depth.adapters.calibration.charuco_calibrator import (
     make_charuco_board, collect_charuco_paired, run_stereo_calibration,
+    compute_per_image_rpe,
 )
 from stereo_depth.infrastructure.config.io import save_yaml
 
@@ -33,6 +36,7 @@ def run_calibrate_charuco_stereo(
     min_charuco: int = 10,
     min_common_ids: int = 10,
     report_json: Path | None = None,
+    per_image_rpe: bool = False,
 ):
     board, dictionary = make_charuco_board(
         squares_x=squares_x,
@@ -81,9 +85,11 @@ def run_calibrate_charuco_stereo(
     # Detect corners from paired images: only keep a view when BOTH sides succeed,
     # guaranteeing l_corners[i] and r_corners[i] always correspond to the same
     # physical board position.
-    l_corners, l_ids, r_corners, r_ids, img_size, l_report, r_report = collect_charuco_paired(
-        left_paths, right_paths, board, dictionary,
-        min_markers=min_markers, min_charuco=min_charuco,
+    l_corners, l_ids, r_corners, r_ids, img_size, l_report, r_report, matched_left_names = (
+        collect_charuco_paired(
+            left_paths, right_paths, board, dictionary,
+            min_markers=min_markers, min_charuco=min_charuco,
+        )
     )
 
     if report_json is None:
@@ -162,4 +168,65 @@ def run_calibrate_charuco_stereo(
     report["metrics"] = calib_out["metrics"]
     report_json.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
+    if per_image_rpe:
+        _print_per_image_rpe(
+            result, l_corners, l_ids, r_corners, r_ids,
+            matched_left_names, board, min_common_ids,
+        )
+
     return out_yaml, report_json
+
+
+def _print_per_image_rpe(
+    result,
+    l_corners, l_ids,
+    r_corners, r_ids,
+    matched_left_names: list[str],
+    board,
+    min_common_ids: int,
+) -> None:
+    """Compute and print per-image stereo RPE sorted worst to best."""
+    from stereo_depth.adapters.calibration.charuco_calibrator import _match_ids_one_view
+
+    K1 = np.array(result.K1, dtype=np.float64)
+    D1 = np.array(result.D1, dtype=np.float64)
+    K2 = np.array(result.K2, dtype=np.float64)
+    D2 = np.array(result.D2, dtype=np.float64)
+    R  = np.array(result.R,  dtype=np.float64)
+    T  = np.array(result.T,  dtype=np.float64)
+
+    chess_corners_3d = board.getChessboardCorners()
+    n = result.used_views
+    lc_used = l_corners[:n]
+    li_used = l_ids[:n]
+    rc_used = r_corners[:n]
+    ri_used = r_ids[:n]
+
+    # Re-run the ID-matching to recover objpoints/imgpoints (same logic as
+    # run_stereo_calibration) while keeping track of which name each view has.
+    objpoints:  list[np.ndarray] = []
+    imgpointsL: list[np.ndarray] = []
+    imgpointsR: list[np.ndarray] = []
+    names:      list[str]        = []
+
+    for lc, li, rc, ri, name in zip(lc_used, li_used, rc_used, ri_used, matched_left_names):
+        matched = _match_ids_one_view(lc, li, rc, ri, chess_corners_3d,
+                                      min_common=min_common_ids)
+        if matched is None:
+            continue
+        obj, ptsL, ptsR = matched
+        objpoints.append(obj)
+        imgpointsL.append(ptsL)
+        imgpointsR.append(ptsR)
+        names.append(name)
+
+    rpes = compute_per_image_rpe(objpoints, imgpointsL, imgpointsR, K1, D1, K2, D2, R, T)
+
+    pairs = sorted(zip(rpes, names), reverse=True)
+
+    print("\nPer-image RPE (sorted worst → best):")
+    for rpe, name in pairs:
+        if np.isfinite(rpe):
+            print(f"  {name:<30s}  {rpe:.3f} px")
+        else:
+            print(f"  {name:<30s}  N/A")

@@ -17,6 +17,8 @@ def calibrate(
     min_markers: int = typer.Option(4),
     min_charuco: int = typer.Option(10),
     min_common_ids: int = typer.Option(10),
+    per_image_rpe: bool = typer.Option(False, "--per-image-rpe",
+                                       help="Print per-image RPE sorted worst to best."),
 ):
     out_yaml, report_json = run_calibrate_charuco_stereo(
         data_dir=data,
@@ -30,6 +32,7 @@ def calibrate(
         min_markers=min_markers,
         min_charuco=min_charuco,
         min_common_ids=min_common_ids,
+        per_image_rpe=per_image_rpe,
     )
     typer.echo(f"Saved calibration: {out_yaml}")
     typer.echo(f"Saved report:      {report_json}")
