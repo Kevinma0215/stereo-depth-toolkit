@@ -109,7 +109,7 @@ class CameraStreamer:
         stable_depth   = self._processor.process_stack(frames)
         process_time_s = time.monotonic() - t0
 
-        rgb_snapshot = self._processor.last_left_rect
+        rgb_snapshot = self._processor.last_left_rect()
 
         log.debug(
             "snapshot(): frame_index=%d  process_time_s=%.3f",

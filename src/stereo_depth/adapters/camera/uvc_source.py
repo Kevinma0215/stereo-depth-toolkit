@@ -20,14 +20,26 @@ def open_source(
     width: int = 0,
     height: int = 0,
     fps: int = 0,
+    mjpeg: bool = True,
 ) -> cv2.VideoCapture:
-    """Open a VideoCapture from a device index, V4L2 path, or video file."""
+    """Open a VideoCapture from a device index, V4L2 path, or video file.
+
+    ``mjpeg=True`` (default) requests MJPEG from the camera before setting
+    resolution and frame rate.  MJPEG compresses frames on-device, which
+    is required to achieve 30 fps at 2560×720 over USB 2.0.  Without it
+    the camera falls back to uncompressed YUYV and is limited to ~5 fps.
+    Set ``mjpeg=False`` only when reading from a video file or a source
+    that does not support MJPEG.
+    """
     if video:
         cap = cv2.VideoCapture(video)
     elif path:
-        cap = cv2.VideoCapture(path)
+        cap = cv2.VideoCapture(path, cv2.CAP_V4L2)
     else:
-        cap = cv2.VideoCapture(device)
+        cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+
+    if mjpeg and not video:
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
 
     if width:  cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     if height: cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)

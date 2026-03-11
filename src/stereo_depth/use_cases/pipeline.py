@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Iterator, Optional, Union
 
 import cv2
@@ -57,6 +58,49 @@ class StereoPipeline:
         self._camera_source   = camera_source
         self._post_processors: list[IPostProcessor] = post_processors or []
         self._last_left_rect: Optional[np.ndarray] = None
+
+    @classmethod
+    def from_yaml(
+        cls,
+        calib_path: str | Path = "outputs/calib/calib.yaml",
+        *,
+        preset: str = "indoor",
+        post_processors: Optional[list[IPostProcessor]] = None,
+    ) -> "StereoPipeline":
+        """Construct a ready-to-use pipeline from a calibration YAML file.
+
+        Wires up the standard adapter stack (OpenCVRectifier, SgbmMatcher,
+        OpenCVDepthEstimator) so callers don't need to import adapters directly.
+
+        Args:
+            calib_path:      Path to a ``calib.yaml`` produced by
+                             ``stereo-depth calibrate``.
+                             Defaults to ``outputs/calib/calib.yaml`` relative
+                             to the current working directory.
+            preset:          SGBM preset — ``"indoor"``, ``"outdoor"``, or
+                             ``"high_quality"``.
+            post_processors: Optional list of :class:`IPostProcessor` instances
+                             applied after depth estimation.
+
+        Example::
+
+            pipeline = StereoPipeline.from_yaml()
+            pipeline = StereoPipeline.from_yaml("outputs/calib/0308_try5/calib.yaml")
+            pipeline = StereoPipeline.from_yaml(preset="outdoor")
+        """
+        from stereo_depth.adapters.calibration.yaml_repo import YamlCalibrationRepo
+        from stereo_depth.adapters.rectifier.opencv_rectifier import OpenCVRectifier
+        from stereo_depth.adapters.matcher.sgbm_matcher import SgbmMatcher
+        from stereo_depth.adapters.depth.opencv_depth_estimator import OpenCVDepthEstimator
+
+        calib = YamlCalibrationRepo().load(str(calib_path))
+        return cls(
+            rectifier=OpenCVRectifier(),
+            matcher=SgbmMatcher(preset=preset),
+            depth_estimator=OpenCVDepthEstimator(),
+            calib=calib,
+            post_processors=post_processors,
+        )
 
     def process(self, pair: FramePair) -> DepthMap:
         rect = self._rectifier.rectify(pair, self._calib)

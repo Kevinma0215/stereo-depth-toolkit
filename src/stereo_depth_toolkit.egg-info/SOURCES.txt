@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/stereo_depth/__init__.py
+src/stereo_depth/camera_streamer.py
 src/stereo_depth/rolling_buffer.py
 src/stereo_depth/adapters/__init__.py
 src/stereo_depth/adapters/calibration/__init__.py
@@ -65,6 +66,7 @@ src/stereo_depth_toolkit.egg-info/entry_points.txt
 src/stereo_depth_toolkit.egg-info/requires.txt
 src/stereo_depth_toolkit.egg-info/top_level.txt
 tests/test_camera_stream.py
+tests/test_camera_streamer.py
 tests/test_charuco_detect_synth.py
 tests/test_cli_preview.py
 tests/test_cuda_bm_matcher.py

@@ -30,7 +30,6 @@ class MockProcessor:
         self._last = np.zeros((720, 1280), dtype=np.float32)
         return self._last
 
-    @property
     def last_left_rect(self) -> np.ndarray:
         return np.zeros((720, 1280, 3), dtype=np.uint8)
 
