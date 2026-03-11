@@ -152,6 +152,39 @@ class CameraStreamer:
         self.stop()
 
     # ------------------------------------------------------------------
+    # Live preview
+    # ------------------------------------------------------------------
+
+    def preview(self, window: str = "CameraStreamer Preview") -> None:
+        """Show a live OpenCV window of the raw SBS stream.
+
+        Blocks until the user presses Q or ESC.  The capture thread keeps
+        running in the background, so snapshot() still works while previewing.
+        """
+        import cv2
+
+        cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window, 1280, 360)   # half-scale: 2560×720 → 1280×360
+
+        while True:
+            _, frames = self._buffer.snapshot()
+            if frames:
+                frame = frames[-1]   # most recent SBS frame
+                small = cv2.resize(frame, (1280, 360), interpolation=cv2.INTER_AREA)
+                cv2.putText(
+                    small,
+                    f"FPS: {self.fps:.1f}  frames: {self._buffer.head_index}  Q quit",
+                    (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 0), 1, cv2.LINE_AA,
+                )
+                cv2.imshow(window, small)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), ord("Q"), 27):
+                break
+
+        cv2.destroyWindow(window)
+
+    # ------------------------------------------------------------------
     # Background thread
     # ------------------------------------------------------------------
 
