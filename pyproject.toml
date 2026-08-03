@@ -4,7 +4,7 @@ version = "0.1.0"
 dependencies = [
   "numpy",
   "opencv-python",
-  "typer[all]",
+  "typer>=0.12",
   "pyyaml",
 ]
 

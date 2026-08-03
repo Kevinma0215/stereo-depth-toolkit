@@ -14,4 +14,4 @@ dependencies:
   - pip
   - pip:
       - pytest
-      - typer[all]
+      - typer>=0.12
