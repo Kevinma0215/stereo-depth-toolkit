@@ -109,7 +109,86 @@ def test_cell_labels_cover_the_three_by_three_grid():
     labels = {cell_label(r, c) for r in range(3) for c in range(3)}
     assert "TOP-LEFT" in labels and "BOTTOM-RIGHT" in labels and "CENTRE" in labels
     assert len(labels) == 9
-    assert cell_label(0, 0, rows=4, cols=4) == "R1C1"
+
+
+def test_cell_labels_stay_human_readable_on_a_finer_grid():
+    """The operator is holding a board — "R3C2" is not an instruction."""
+    assert cell_label(0, 0, rows=4, cols=4) == "TOP-LEFT"
+    assert cell_label(3, 3, rows=4, cols=4) == "BOTTOM-RIGHT"
+    assert cell_label(1, 1, rows=4, cols=4) == "CENTRE"
+
+    labels = {cell_label(r, c, 4, 4) for r in range(4) for c in range(4)}
+    assert labels <= {
+        "TOP-LEFT", "TOP", "TOP-RIGHT", "LEFT", "CENTRE", "RIGHT",
+        "BOTTOM-LEFT", "BOTTOM", "BOTTOM-RIGHT",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Radial reach — grid occupancy alone is misleading
+# ---------------------------------------------------------------------------
+
+def test_radial_fraction_measures_distance_to_the_frame_corner():
+    cov = CoverageTracker(IMG_SIZE, 4, 4)
+    w, h = IMG_SIZE
+    corner_r = np.hypot(w / 2, h / 2)
+
+    centre = _corners_at(w / 2, h / 2, spread=1)
+    assert cov.radial_fraction(centre) < 0.02
+
+    # a corner sitting exactly on the frame corner is 100%
+    at_corner = _corners_at(w, h, spread=1)
+    assert cov.radial_fraction(at_corner) == pytest.approx(1.0, abs=0.01)
+    assert cov.radius_of(at_corner) == pytest.approx(corner_r, rel=0.01)
+
+
+def test_full_grid_coverage_can_still_leave_the_edges_empty():
+    """Regression for a real session that reported complete coverage while
+    holding no data past 73% of the corner radius — the outer cells are wide,
+    so a board parked mid-cell never approaches the frame edge."""
+    cov = CoverageTracker(IMG_SIZE, 3, 3, min_corners=6, edge_target=0.85)
+    w, h = IMG_SIZE
+    for r in range(3):
+        for c in range(3):
+            cov.commit(_corners_at((c + 0.5) * w / 3, (r + 0.5) * h / 3, spread=40))
+
+    assert cov.missing() == []           # grid says "done"
+    assert not cov.edge_ok()             # radial gate says otherwise
+    assert cov.radial_fraction() < 0.85
+
+
+def test_edge_gate_opens_once_corners_reach_the_frame_edge():
+    cov = CoverageTracker(IMG_SIZE, 4, 4, edge_target=0.85)
+    w, h = IMG_SIZE
+
+    cov.commit(_corners_at(w / 2, h / 2, spread=40))
+    assert not cov.edge_ok()
+
+    cov.commit(_corners_at(w - 30, h - 30, spread=40))
+    assert cov.edge_ok()
+
+
+def test_radial_reach_only_ever_grows():
+    cov = CoverageTracker(IMG_SIZE, 4, 4)
+    w, h = IMG_SIZE
+
+    cov.commit(_corners_at(w - 40, h - 40, spread=30))
+    far = cov.radial_fraction()
+    cov.commit(_corners_at(w / 2, h / 2, spread=30))
+
+    assert cov.radial_fraction() == pytest.approx(far)
+
+
+def test_finer_grid_has_narrower_outer_cells():
+    """The 4x4 default exists so a mid-cell board cannot fake edge coverage."""
+    w, h = IMG_SIZE
+    coarse = CoverageTracker(IMG_SIZE, 3, 3, min_corners=6)
+    fine = CoverageTracker(IMG_SIZE, 4, 4, min_corners=6)
+
+    # a board a third of the way in marks the coarse corner cell, not the fine one
+    board = _corners_at(w * 0.29, h * 0.29, spread=40)
+    assert (0, 0) in coarse.cells_of(board)
+    assert (0, 0) not in fine.cells_of(board)
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +443,7 @@ def test_accept_advances_progress_and_coverage():
     prog = pol.progress()
     assert prog["views"] == 1
     assert prog["cells"] == 1
-    assert prog["total_cells"] == 9
+    assert prog["total_cells"] == 16
 
 
 def test_undo_steps_the_count_back():
@@ -377,25 +456,99 @@ def test_undo_steps_the_count_back():
     assert pol.progress()["views"] == 0
 
 
-def test_done_requires_views_coverage_and_tilt_diversity():
-    pol = _policy(target_views=2, min_tilt_bins=2)
+def _fill_grid(pol, *, reach_edge=False):
+    """Cover every cell; optionally also reach the frame corner."""
     w, h = IMG_SIZE
+    rows, cols = pol.coverage.rows, pol.coverage.cols
+    for r in range(rows):
+        for c in range(cols):
+            pol.accept(_det(_corners_at((c + 0.5) * w / cols,
+                                        (r + 0.5) * h / rows, spread=30)), 0.0)
+    if reach_edge:
+        pol.accept(_det(_corners_at(w - 25, h - 25, spread=30)), 0.0)
 
-    # plenty of views and full coverage, but no tilt variety yet
-    for r in range(3):
-        for c in range(3):
-            pol.accept(_det(_corners_at((c + 0.5) * w / 3, (r + 0.5) * h / 3)), 0.0)
+
+def test_done_requires_views_coverage_edge_reach_and_tilt_diversity():
+    pol = _policy(target_views=2, min_tilt_bins=2, rows=3, cols=3)
+
+    _fill_grid(pol)
     assert not pol.coverage.missing()
     assert pol.progress()["views"] >= 2
     assert not pol.done()                            # tilt bins still empty
 
     pol.tilt.commit("frontal")
     pol.tilt.commit("left")
+    assert not pol.done()                            # edges still unreached
+
+    pol.accept(_det(_corners_at(IMG_SIZE[0] - 25, IMG_SIZE[1] - 25, spread=30)), 0.0)
     assert pol.done()
 
 
-def test_guidance_directs_the_user_to_an_uncovered_cell():
+def test_guidance_asks_for_the_edges_once_the_grid_is_full():
+    pol = _policy(rows=3, cols=3)
+    gray = _sharp_gray()
+    _fill_grid(pol)
+    for b in TILT_BINS:
+        pol.tilt.commit(b)
+
+    parked = _corners_at(IMG_SIZE[0] / 2, IMG_SIZE[1] / 2, spread=30)
+    pol.accept(_det(parked), 9.0)
+    for i in range(4):
+        st = pol.evaluate(_det(parked), gray, 10.0 + i * 0.01)
+
+    assert not st.novel_ok
+    assert "edge" in st.guidance.lower()
+    assert "%" in st.guidance                        # tells them how far they got
+
+
+def test_reaching_further_out_counts_as_novel():
+    """Extending the radial reach is worth keeping even inside a covered cell."""
+    pol = _policy(rows=3, cols=3)
+    gray = _sharp_gray()
+    w, h = IMG_SIZE
+
+    inner = _corners_at(950, 300, spread=25)
+    pol.accept(_det(inner), 0.0)
+
+    outer = _corners_at(1200, 450, spread=25)            # same cell, further out
+    assert pol.coverage.cells_of(outer) == pol.coverage.cells_of(inner)
+    for i in range(4):
+        st = pol.evaluate(_det(outer), gray, 10.0 + i * 0.01)
+
+    assert not st.new_cells
+    assert st.novel_ok
+
+
+def test_progress_reports_edge_reach():
     pol = _policy()
+    pol.accept(_det(_corners_at(IMG_SIZE[0] / 2, IMG_SIZE[1] / 2, spread=20)), 0.0)
+
+    prog = pol.progress()
+    assert 0.0 <= prog["edge_frac"] < 0.5
+    assert prog["edge_target"] == pytest.approx(0.85)
+    assert prog["edge_ok"] is False
+
+
+def test_gate_status_carries_this_frames_reach():
+    pol = _policy()
+    gray = _sharp_gray()
+    w, h = IMG_SIZE
+
+    st = pol.evaluate(_det(_corners_at(w - 30, h - 30, spread=30)), gray, 0.0)
+    assert st.edge_frac > 0.85
+
+    st = pol.evaluate(_det(_corners_at(w / 2, h / 2, spread=30)), gray, 1.0)
+    assert st.edge_frac < 0.2
+
+
+def test_policy_defaults_to_a_four_by_four_grid():
+    pol = _policy()
+    assert (pol.coverage.rows, pol.coverage.cols) == (4, 4)
+    assert pol.coverage.total_cells == 16
+
+
+def test_guidance_directs_the_user_to_an_uncovered_cell():
+    pol = _policy(rows=3, cols=3)
     gray = _sharp_gray()
     w, h = IMG_SIZE
     for r in range(3):
@@ -415,7 +568,7 @@ def test_guidance_directs_the_user_to_an_uncovered_cell():
 
 def test_guidance_points_at_the_nearest_gap_not_the_first_one():
     """Two cells open: the user is sent to whichever is closer to the board."""
-    pol = _policy()
+    pol = _policy(rows=3, cols=3)
     gray = _sharp_gray()
     w, h = IMG_SIZE
     open_cells = {(0, 0), (2, 2)}

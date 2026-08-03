@@ -87,7 +87,8 @@ def run_capture_mono(
     min_charuco: int = 10,
     target_views: int = 40,
     blur_min: float = 60.0,
-    grid: int = 3,
+    grid: int = 4,
+    edge_target: float = 0.85,
     auto: bool = True,
 ) -> int:
     """Stream one camera and auto-save views that clear every quality gate.
@@ -117,6 +118,7 @@ def run_capture_mono(
     policy = AutoCollectPolicy(
         image_size, board,
         target_views=target_views, blur_min=blur_min, rows=grid, cols=grid,
+        edge_target=edge_target,
     )
 
     n_saved = 0
@@ -196,12 +198,17 @@ def run_capture_mono(
 
     p = policy.progress()
     print(f"\nCollected {n_saved} images to {out_dir}")
-    print(f"  coverage {p['cells']}/{p['total_cells']} cells, {p['tilts']} tilt bins")
+    print(f"  coverage {p['cells']}/{p['total_cells']} cells, "
+          f"edge reach {p['edge_frac'] * 100:.0f}%, {p['tilts']} tilt bins")
     if not policy.done():
         missing = policy.coverage.missing()
         if missing:
             print(f"  WARNING: {len(missing)} image regions never covered - "
                   "distortion at the edges will be extrapolated")
+        if not p["edge_ok"]:
+            print(f"  WARNING: corners only reached {p['edge_frac'] * 100:.0f}% of the "
+                  f"way to the frame corners (want {p['edge_target'] * 100:.0f}%) - "
+                  "the distortion model has no data out there and will extrapolate")
         if p["tilts"] < p["min_tilt_bins"]:
             print(f"  WARNING: only {p['tilts']} tilt bins seen "
                   f"(want {p['min_tilt_bins']}) - fx/fy may be poorly separated")
@@ -225,6 +232,7 @@ def _draw_capture_hud(img, policy: AutoCollectPolicy, status, n_saved: int, auto
             ("STEADY", status.steady_ok),
             ("NEW", status.novel_ok),
             (f"TILT {status.tilt_bin or '-'}", status.tilt_bin is not None),
+            (f"EDGE {prog['edge_frac'] * 100:.0f}%", prog["edge_ok"]),
         ],
         (10, int(policy.coverage.rows * 30) + 34),
     )
@@ -242,6 +250,7 @@ def _draw_capture_hud(img, policy: AutoCollectPolicy, status, n_saved: int, auto
         f"views {prog['views']}/{prog['target_views']}  "
         f"cells {prog['cells']}/{prog['total_cells']}  "
         f"tilts {prog['tilts']}/{prog['min_tilt_bins']}  "
+        f"edge {prog['edge_frac'] * 100:.0f}/{prog['edge_target'] * 100:.0f}%  "
         f"auto {'ON' if auto_on else 'OFF'}  |  SPACE save  R undo  G auto  Q quit",
         (10, h - 14), scale=0.5, color=WHITE,
     )

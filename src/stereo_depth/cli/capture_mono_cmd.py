@@ -23,7 +23,13 @@ def capture_mono(
     min_charuco: int = typer.Option(10),
     target_views: int = typer.Option(40, help="Views to collect before done"),
     blur_min: float = typer.Option(60.0, help="Minimum Laplacian variance"),
-    grid: int = typer.Option(3, help="Coverage grid is grid x grid"),
+    grid: int = typer.Option(4, help="Coverage grid is grid x grid"),
+    edge_target: float = typer.Option(
+        0.85,
+        help="Corners must reach this fraction of the way to the frame corners. "
+             "Grid coverage alone can read 'complete' while the distortion "
+             "model still has no data near the edges.",
+    ),
     auto: bool = typer.Option(True, help="Auto-save views that pass every gate"),
 ):
     """Stream a camera and auto-collect calibration views with live guidance."""
@@ -43,6 +49,7 @@ def capture_mono(
         target_views=target_views,
         blur_min=blur_min,
         grid=grid,
+        edge_target=edge_target,
         auto=auto,
     )
     if n:

@@ -37,10 +37,20 @@ _CELL_LABELS = {
 
 
 def cell_label(row: int, col: int, rows: int = 3, cols: int = 3) -> str:
-    """Human-readable name for a coverage cell."""
-    if (rows, cols) == (3, 3):
-        return _CELL_LABELS[(row, col)]
-    return f"R{row + 1}C{col + 1}"
+    """Human-readable name for a coverage cell.
+
+    Any grid size is described with the same nine compass words a person can
+    act on — "R3C2" tells the operator nothing while the board is in their
+    hands. Cells map onto thirds of each axis, so a 4x4 grid still yields
+    TOP-LEFT, TOP, TOP-RIGHT and so on.
+    """
+    def band(i: int, n: int) -> int:
+        # place the cell by its centre, so the middle band of an even grid
+        # lands on the middle cells rather than being swallowed by the first
+        pos = (i + 0.5) / n
+        return 0 if pos < 1 / 3 else (1 if pos < 2 / 3 else 2)
+
+    return _CELL_LABELS[(band(row, rows), band(col, cols))]
 
 
 # ---------------------------------------------------------------------------
@@ -53,25 +63,63 @@ class CoverageTracker:
     A cell counts as visited when it holds at least ``min_corners`` ChArUco
     corners — corners, not the board centre, because it is the corners that
     actually constrain the distortion model.
+
+    Grid occupancy alone is not enough, and reporting it alone is actively
+    misleading: on a coarse grid the outer cells are wide, so a board parked
+    in the middle of one marks it covered without the corners ever
+    approaching the frame edge. A real session can read "all cells covered"
+    while holding no data past ~70% of the corner radius — exactly the
+    region the distortion coefficients depend on. The radial reach is
+    therefore tracked separately and gated on its own.
     """
 
     def __init__(
         self,
         image_size: tuple[int, int],
-        rows: int = 3,
-        cols: int = 3,
+        rows: int = 4,
+        cols: int = 4,
         *,
         min_corners: int = 6,
+        edge_target: float = 0.85,
     ) -> None:
         self.image_size = image_size
         self.rows = rows
         self.cols = cols
         self.min_corners = min_corners
+        self.edge_target = edge_target
         self.covered: set[tuple[int, int]] = set()
+
+        w, h = image_size
+        self._centre = (w / 2.0, h / 2.0)
+        self._corner_radius = float(np.hypot(w / 2.0, h / 2.0))
+        self.max_radius_seen: float = 0.0
 
     @property
     def total_cells(self) -> int:
         return self.rows * self.cols
+
+    def radius_of(self, corners: np.ndarray | None) -> float:
+        """Furthest any corner sits from the image centre, in pixels.
+
+        The principal point is unknown before calibration, so the image
+        centre stands in for it — close enough to steer the operator.
+        """
+        if corners is None or len(corners) == 0:
+            return 0.0
+        pts = np.asarray(corners, dtype=np.float64).reshape(-1, 2)
+        cx, cy = self._centre
+        return float(np.hypot(pts[:, 0] - cx, pts[:, 1] - cy).max())
+
+    def radial_fraction(self, corners: np.ndarray | None = None) -> float:
+        """Reach as a fraction of the corner radius, 0..1+.
+
+        With ``corners`` given, reports that frame; otherwise the best seen.
+        """
+        r = self.radius_of(corners) if corners is not None else self.max_radius_seen
+        return r / self._corner_radius if self._corner_radius else 0.0
+
+    def edge_ok(self) -> bool:
+        return self.radial_fraction() >= self.edge_target
 
     def cells_of(self, corners: np.ndarray | None) -> set[tuple[int, int]]:
         """Cells holding at least ``min_corners`` of the given corners."""
@@ -93,6 +141,7 @@ class CoverageTracker:
         cells = self.cells_of(corners)
         new = cells - self.covered
         self.covered |= cells
+        self.max_radius_seen = max(self.max_radius_seen, self.radius_of(corners))
         return new
 
     def missing(self) -> list[tuple[int, int]]:
@@ -278,6 +327,7 @@ class GateStatus:
     tilt_deg: float | None = None
     current_cells: set[tuple[int, int]] = field(default_factory=set)
     new_cells: set[tuple[int, int]] = field(default_factory=set)
+    edge_frac: float = 0.0          # this frame's reach toward the corners
 
     @property
     def all_ok(self) -> bool:
@@ -305,12 +355,13 @@ class AutoCollectPolicy:
         steady_px: float = 2.0,
         steady_frames: int = 4,
         cooldown_s: float = 0.7,
-        rows: int = 3,
-        cols: int = 3,
+        rows: int = 4,
+        cols: int = 4,
         min_cell_corners: int = 6,
         move_frac: float = 0.05,
         scale_frac: float = 0.15,
         min_tilt_bins: int = 4,
+        edge_target: float = 0.85,
     ) -> None:
         self.image_size = image_size
         self.board = board
@@ -321,7 +372,10 @@ class AutoCollectPolicy:
         self.scale_frac = scale_frac
         self.min_tilt_bins = min_tilt_bins
 
-        self.coverage = CoverageTracker(image_size, rows, cols, min_corners=min_cell_corners)
+        self.coverage = CoverageTracker(
+            image_size, rows, cols,
+            min_corners=min_cell_corners, edge_target=edge_target,
+        )
         self.steady = SteadyTracker(max_motion_px=steady_px, frames=steady_frames)
         self.tilt = TiltTracker(image_size)
 
@@ -342,6 +396,11 @@ class AutoCollectPolicy:
 
     def _is_novel(self, corners: np.ndarray, new_cells: set, new_tilt: bool) -> bool:
         if new_cells or new_tilt:
+            return True
+        # Reaching further toward the corners is always worth keeping, even
+        # inside an already-covered cell — that is the data the distortion
+        # coefficients are short of.
+        if self.coverage.radius_of(corners) > self.coverage.max_radius_seen * 1.02:
             return True
         if self._last_centroid is None:
             return True
@@ -386,6 +445,7 @@ class AutoCollectPolicy:
 
         st.current_cells = self.coverage.cells_of(det.corners)
         st.new_cells = st.current_cells - self.coverage.covered
+        st.edge_frac = self.coverage.radial_fraction(det.corners)
         new_tilt = st.tilt_bin is not None and st.tilt_bin not in self.tilt.filled
         st.novel_ok = self._is_novel(det.corners, st.new_cells, new_tilt)
 
@@ -408,12 +468,13 @@ class AutoCollectPolicy:
             target = self.coverage.nearest_missing_label(corners)
             if target:
                 return f"Move the board to {target}"
+            if not self.coverage.edge_ok():
+                pct = int(round(self.coverage.radial_fraction() * 100))
+                return f"Push the board off the frame edge (reached {pct}%)"
             missing_tilts = self.tilt.missing()
             if missing_tilts:
                 return f"Tilt the board {missing_tilts[0].upper()}"
             return "Move or rotate the board to a new position"
-        if st.new_cells:
-            return "Good - capturing"
         return "Good - capturing"
 
     def accept(self, det: CharucoDetection, now: float) -> None:
@@ -442,6 +503,7 @@ class AutoCollectPolicy:
         return (
             self.accepted >= self.target_views
             and not self.coverage.missing()
+            and self.coverage.edge_ok()
             and len(self.tilt.filled) >= self.min_tilt_bins
         )
 
@@ -453,4 +515,7 @@ class AutoCollectPolicy:
             "total_cells": self.coverage.total_cells,
             "tilts": len(self.tilt.filled),
             "min_tilt_bins": self.min_tilt_bins,
+            "edge_frac": self.coverage.radial_fraction(),
+            "edge_target": self.coverage.edge_target,
+            "edge_ok": self.coverage.edge_ok(),
         }

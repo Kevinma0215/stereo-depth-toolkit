@@ -312,19 +312,23 @@ Frames save **automatically** when every gate passes. Read the HUD:
 | Element | Meaning |
 |---|---|
 | Grid, top-left | green = covered, yellow outline = board now, dim red = missing |
-| Status dots | `CORNERS` `SHARP` `STEADY` `NEW` `TILT` |
+| Status dots | `CORNERS` `SHARP` `STEADY` `NEW` `TILT` `EDGE` |
 | Centre banner | the single most useful instruction right now |
-| Bottom bar | `views / cells / tilts` progress |
+| Bottom bar | `views / cells / tilts / edge` progress |
 
 Keys: `SPACE` force-save · `R` undo · `G` toggle auto · `Q` quit.
 
-**Aim for all 9 cells green and 4+ tilt bins.** Push the board into the
-corners of the frame and tilt it 20–40° left, right, up and down. On a wide
-lens the distortion coefficients come almost entirely from corners far from
-the image centre; a session shot in the middle of the frame produces
-confident-looking numbers that are pure extrapolation at the edges.
+**Aim for all 16 cells green, `EDGE` green, and 4+ tilt bins.** Tilt the board
+20–40° left, right, up and down, and deliberately let part of it hang off the
+side of the frame — partial views still contribute their visible corners, and
+they are the only way to get data near the edges.
 
-On exit it warns if coverage or tilt variety fell short.
+Watch `EDGE` specifically. Grid coverage can read complete while the corners
+never approach the frame edge, because the outer cells are wide (§4.7). On a
+wide lens the distortion coefficients come almost entirely from corners far
+from the image centre.
+
+On exit it warns about whichever of coverage, edge reach or tilt fell short.
 
 ### 4.4 Calibrate
 
@@ -363,7 +367,103 @@ for v in sorted(r['per_view_rpe'], key=lambda x: -x['rpe_px'])[:10]:
 
 Delete the worst offenders and re-run if a few images dominate the error.
 
-### 4.6 Visual check
+### 4.6 Diagnosing a high RPE
+
+When RPE misses the target, the shape of the per-view errors says what to
+look at:
+
+- **One or two views far above the rest** — bad individual frames. Delete
+  them and re-run.
+- **Uniformly elevated across every view** — systematic. Corner localisation
+  is degraded everywhere, so look at image quality, not at individual shots.
+
+This script measures the three things that cause the uniform case:
+
+```bash
+python - <<'PY'
+import cv2, numpy as np, json
+from pathlib import Path
+from stereo_depth.adapters.calibration.charuco_calibrator import make_charuco_board, detect_charuco
+from stereo_depth.adapters.calibration.capture_gates import CoverageTracker, TiltTracker
+
+DATA   = Path('data/mono/trial')        # <- your image folder
+REPORT = 'outputs/calib/trial.report.json'
+W, H   = 1920, 1080                     # <- your capture size
+
+board, dic = make_charuco_board(7, 5, 0.03, 0.022, 'DICT_5X5_100')
+cov, tilt = CoverageTracker((W, H), 4, 4), TiltTracker((W, H))
+contrasts, pts_all = [], []
+
+for p in sorted(DATA.glob('*.png')):
+    g = cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2GRAY)
+    d = detect_charuco(g, board, dic)
+    if not d.ok:
+        print(f'{p.name}: DETECTION FAILED ({d.reason})'); continue
+    q = d.corners.reshape(-1, 2)
+    roi = g[int(q[:,1].min()):int(q[:,1].max()), int(q[:,0].min()):int(q[:,0].max())]
+    lo, hi = np.percentile(roi, [5, 95])
+    contrasts.append(hi - lo)
+    pts_all.append(q); cov.commit(d.corners)
+    po = tilt.pose_of(d.corners, d.ids, board)
+    if po: tilt.commit(tilt.bin_of(*po))
+
+c = np.array(contrasts)
+print(f'\nEXPOSURE  contrast {c.mean():.0f}/255   (want >150; <100 hurts corner accuracy)')
+print(f'EDGE      corners reached {cov.radial_fraction()*100:.0f}% of the corner radius (want >85%)')
+print(f'GRID      {len(cov.covered)}/{cov.total_cells} cells')
+print(f'TILT      {sorted(tilt.filled)}')
+
+pts = np.concatenate(pts_all)
+r = np.hypot(pts[:,0]-W/2, pts[:,1]-H/2) / np.hypot(W/2, H/2)
+for f in (0.7, 0.8, 0.9):
+    print(f'  corners beyond {f*100:.0f}% radius: {(r>f).sum():4d}  ({100*(r>f).mean():.1f}%)')
+PY
+```
+
+| Reading | Healthy | Meaning if not |
+|---|---|---|
+| contrast | > 150 / 255 | underexposed; soft edges make sub-pixel corners uncertain |
+| edge reach | > 85% | distortion coefficients are extrapolating |
+| grid | all cells | whole regions unmodelled |
+| tilt | 4–5 bins | fx/fy poorly separated from the radial terms |
+
+**Exposure is the one most often missed.** A board that looks fine on screen
+can be sitting at a quarter of the available range. Check and fix with:
+
+```bash
+v4l2-ctl -d /dev/videoN --list-ctrls
+v4l2-ctl -d /dev/videoN --set-ctrl=auto_exposure=1
+v4l2-ctl -d /dev/videoN --set-ctrl=exposure_time_absolute=300
+```
+
+(Control names vary by driver — use whatever `--list-ctrls` shows.) Or simply
+add light. Target white squares around 180–220 without clipping, black
+squares 30–50. Note that `--square-length` does **not** affect RPE at all: it
+scales the object points and therefore only sets metric scale.
+
+### 4.7 Grid coverage alone is not enough
+
+A real trial on this repo reported **9/9 cells covered** on the old 3×3 grid
+while its corners never got past **79%** of the corner radius — and *zero*
+corners beyond 80%. (Measured against the calibrated principal point rather
+than the image centre it was 73%; the capture-time gate uses the image centre,
+since no calibration exists yet.) The outer cells of a 3×3 grid span a third
+of the frame, so a board parked in the middle of one marks it covered without
+ever approaching the edge.
+
+Hence the separate `EDGE` gate and the 4×4 default — the same session scores
+**11/16** cells on the finer grid, correctly reporting itself incomplete. If
+you see a warning like
+
+```
+WARNING: corners only reached 79% of the way to the frame corners (want 85%)
+```
+
+collect more views with the board hanging off the frame edges, then
+recalibrate. `tests/test_capture_gates.py` keeps that 73% session as a
+regression case.
+
+### 4.8 Visual check
 
 ```bash
 stereo-depth undistort --calib outputs/calib/mono.yaml --live --path /dev/videoN

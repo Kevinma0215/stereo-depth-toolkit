@@ -44,20 +44,28 @@ no key pressing. The on-screen HUD tells you what to do next.
 | Element | Meaning |
 |---|---|
 | Coverage grid (top-left) | green = covered, yellow outline = where the board is now, dim red = still missing |
-| Status dots (below it) | `CORNERS` `SHARP` `STEADY` `NEW` `TILT` — the five gates |
+| Status dots (below it) | `CORNERS` `SHARP` `STEADY` `NEW` `TILT` `EDGE` — the gates |
 | Centre banner | the single most useful instruction right now |
-| Bottom bar | `views / cells / tilts` progress |
+| Bottom bar | `views / cells / tilts / edge` progress |
 
 Keys: `SPACE` force-save (bypasses the novelty check), `R` undo the last save,
 `G` toggle auto-capture, `Q` quit.
 
 ### The four gates and why they exist
 
-- **Coverage** — a cell counts as covered once ≥ 6 ChArUco corners land in it.
-  Distortion coefficients are driven almost entirely by corners far from the
-  image centre; a session shot only in the middle of the frame yields
-  confident-looking coefficients that are pure extrapolation at the edges.
-  This matters most on a wide lens.
+- **Coverage** — the frame is split into a 4×4 grid (`--grid`); a cell counts
+  as covered once ≥ 6 ChArUco corners land in it. Distortion coefficients are
+  driven almost entirely by corners far from the image centre; a session shot
+  only in the middle of the frame yields confident-looking coefficients that
+  are pure extrapolation at the edges. This matters most on a wide lens.
+- **Edge reach** — tracked separately from the grid, because grid occupancy
+  on its own is misleading. The outer cells are wide, so a board parked in the
+  middle of one marks it covered without the corners ever approaching the
+  frame edge. A real session reported *all cells covered* while holding no
+  data past 73% of the corner radius — exactly the region the coefficients
+  depend on. The `EDGE` gate requires corners to reach `--edge-target`
+  (default 0.85) of the way to the frame corners, and the session is not
+  `done` until they do.
 - **Sharpness** — Laplacian variance measured *only over the board's bounding
   box*, so a busy background cannot mask a blurred board.
 - **Steadiness** — the board must barely move for several consecutive frames.
@@ -72,8 +80,10 @@ Keys: `SPACE` force-save (bypasses the novelty check), `R` undo the last save,
   bin, or differs enough in position or apparent size from the last one. This
   stops the set filling with near-duplicates that bias the solver.
 
-Aim for the full 3×3 coverage and at least 4 tilt bins. The command warns on
-exit if either is short.
+Aim for full grid coverage, `EDGE` green, and at least 4 tilt bins. Getting
+`EDGE` green means deliberately letting part of the board hang off the side
+of the frame — partial views still contribute their visible corners. The
+command warns on exit about whichever of the three fell short.
 
 ---
 

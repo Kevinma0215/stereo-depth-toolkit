@@ -180,10 +180,28 @@ def test_capture_stops_once_the_target_is_complete(tmp_path, monkeypatch, headle
     _keys(monkeypatch, [])
     out = tmp_path / "shots"
 
-    n = run_capture_mono(out, path="/dev/video0", target_views=3, grid=1, **BOARD_KW)
+    # one coverage cell and a reachable edge target, so done() can be met
+    n = run_capture_mono(out, path="/dev/video0", target_views=3,
+                         grid=1, edge_target=0.5, **BOARD_KW)
 
-    # grid=1 means one coverage cell, so done() can actually be reached
     assert n <= 6
+
+
+def test_edge_gate_keeps_collecting_when_the_corners_are_untouched(
+    tmp_path, monkeypatch, headless, frames, capsys
+):
+    """These synthetic views never approach the frame corners, so the session
+    must not declare itself finished — and must say why on the way out."""
+    _use_frames(monkeypatch, frames)
+    _keys(monkeypatch, [])
+    out = tmp_path / "shots"
+
+    run_capture_mono(out, path="/dev/video0", target_views=3,
+                     grid=1, edge_target=0.95, **BOARD_KW)
+
+    printed = capsys.readouterr().out
+    assert "of the way to the frame corners" in printed
+    assert "extrapolate" in printed
 
 
 def test_collected_images_calibrate(tmp_path, monkeypatch, headless, frames):
