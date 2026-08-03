@@ -4,10 +4,14 @@ channels:
   - defaults
 dependencies:
   - python=3.10
-  - opencv
+  # OpenCV 5 moved the fisheye CALIB_* constants out of cv2.fisheye and changed
+  # stereoRectify's argument handling; both the stereo and mono pipelines break
+  # on it. Keep this pinned until the codebase is ported.
+  - opencv>=4.10,<5
   - scipy
   - numpy
+  - pyyaml
   - pip
   - pip:
       - pytest
-prefix: /home/clm_ubuntu/miniconda3/envs/CV
+      - typer[all]
