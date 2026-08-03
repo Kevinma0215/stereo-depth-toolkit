@@ -125,6 +125,38 @@ python tools/evaluate_depth.py --all
 
 ---
 
+## Mono (single-camera) intrinsics
+
+Separate track for calibrating **one** wide-angle USB camera, e.g. to drop into
+NVIDIA Isaac Sim. Full guide: [docs/mono_calibration.md](docs/mono_calibration.md).
+
+```bash
+stereo-depth devices --probe                       # find the camera
+
+stereo-depth capture-mono \                        # live, auto-collects good views
+  --out-dir data/mono/$(date +%Y-%m-%d)_run1 --path /dev/video0 --target-views 40
+
+stereo-depth calibrate-mono \                      # fits 3 models, picks one, exports
+  --data data/mono/2026-08-03_run1 --out outputs/calib/mono.yaml
+
+stereo-depth undistort \                           # optional pre-processing
+  --calib outputs/calib/mono.yaml --images data/mono/2026-08-03_run1 \
+  --out outputs/undistorted --alpha 0
+```
+
+`capture-mono` guides you on screen — it tracks image coverage, sharpness,
+steadiness and board tilt, and saves frames automatically when all gates pass.
+
+`calibrate-mono` fits `pinhole` (5 coeff), `rational` (8) and `fisheye` (4) to
+the same views and selects by **held-out** reprojection error, so extra
+coefficients cannot win by overfitting. The YAML carries both Isaac Sim USD
+camera attributes and the OpenCV distortion blocks.
+
+> **`K_new != K`.** `K`/`D` describe raw frames; `K_new` (zero distortion)
+> describes undistorted frames. Mixing them is the classic wide-angle bug.
+
+---
+
 ## Matchers
 
 | Matcher | Flag | Backend | Notes |

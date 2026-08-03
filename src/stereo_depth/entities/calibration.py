@@ -19,3 +19,21 @@ class CalibrationResult:
     P2: np.ndarray               # 3×4 projection matrix for right
     Q: np.ndarray                # 4×4 disparity-to-depth reprojection matrix
     rpe_px: float                # reprojection error in pixels (informational)
+
+
+@dataclass
+class MonoIntrinsics:
+    """Intrinsic calibration of a single camera.
+
+    ``K``/``D`` pair with RAW (distorted) images. The distortion model
+    determines the length and meaning of ``D``:
+      - "pinhole":  (5,)  Brown-Conrady  (k1, k2, p1, p2, k3)
+      - "rational": (8,)  Brown-Conrady  (k1, k2, p1, p2, k3, k4, k5, k6)
+      - "fisheye":  (4,)  equidistant    (k1, k2, k3, k4)  — cv2.fisheye order
+    """
+    model: str                   # "pinhole" | "rational" | "fisheye"
+    image_size: tuple[int, int]  # (width, height)
+    K: np.ndarray                # 3×3 intrinsic matrix
+    D: np.ndarray                # distortion coefficients, model-dependent length
+    rpe_px: float                # full-set RMS reprojection error in pixels
+    views_used: int              # number of views used in the final fit

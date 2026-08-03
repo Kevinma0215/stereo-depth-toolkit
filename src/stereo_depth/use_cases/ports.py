@@ -7,6 +7,7 @@ from stereo_depth.entities import (
     FramePair,
     RectifiedPair,
     CalibrationResult,
+    MonoIntrinsics,
     DepthMap,
 )
 
@@ -32,6 +33,18 @@ class ICalibrationRepo(ABC):
     @abstractmethod
     def save(self, result: CalibrationResult, path: str) -> None:
         """Persist a CalibrationResult to the given file path."""
+        ...
+
+
+class IMonoCalibrationRepo(ABC):
+    @abstractmethod
+    def load(self, path: str) -> MonoIntrinsics:
+        """Load a MonoIntrinsics from the given file path."""
+        ...
+
+    @abstractmethod
+    def save(self, result: MonoIntrinsics, path: str) -> None:
+        """Persist a MonoIntrinsics to the given file path."""
         ...
 
 
