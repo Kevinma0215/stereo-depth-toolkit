@@ -194,10 +194,16 @@ outputs/depth/<name>/          # disparity.npy, depth_m.npy, *.png
 All tests are hardware-independent. Run with:
 
 ```bash
-pytest
+pytest        # 256 passed, 14 skipped
 ```
 
-Tests use `FileSource` or synthetic data. Tests requiring the `retinify` package or real calibration files are auto-skipped when absent.
+Tests use `FileSource` or synthetic data. Tests requiring the `retinify` package, a CUDA GPU, or real calibration files are auto-skipped when absent.
+
+**[TESTING.md](TESTING.md)** is the full verification guide: environment checks, a per-file coverage map, a camera-free end-to-end smoke test, the real-camera procedure with pass criteria, and a troubleshooting table.
+
+> Keep the `opencv>=4.10,<5` pin in `environment.yml`. OpenCV 5 moved the
+> `cv2.fisheye.CALIB_*` constants and changed `stereoRectify`, breaking both
+> the mono and stereo paths — see TESTING.md §1.3.
 
 ---
 
