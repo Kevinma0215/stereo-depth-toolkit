@@ -10,3 +10,8 @@ outputs/
 # Python
 __pycache__/
 *.py[cod]
+
+# Packaging
+*.egg-info/
+build/
+dist/

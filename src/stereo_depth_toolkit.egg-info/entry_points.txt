@@ -1,2 +1,0 @@
-[console_scripts]
-stereo-depth = stereo_depth.cli.app:main
