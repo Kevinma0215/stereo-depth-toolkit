@@ -134,7 +134,8 @@ NVIDIA Isaac Sim. Full guide: [docs/mono_calibration.md](docs/mono_calibration.m
 stereo-depth devices --probe                       # find the camera
 
 stereo-depth capture-mono \                        # live, auto-collects good views
-  --out-dir data/mono/$(date +%Y-%m-%d)_run1 --path /dev/video0 --target-views 40
+  --out-dir data/mono/$(date +%Y-%m-%d)_run1 --path /dev/video0 \
+  --fourcc YUYV --width 640 --height 480 --target-views 40
 
 stereo-depth calibrate-mono \                      # fits 3 models, picks one, exports
   --data data/mono/2026-08-03_run1 --out outputs/calib/mono.yaml
@@ -144,8 +145,10 @@ stereo-depth undistort \                           # optional pre-processing
   --out outputs/undistorted --alpha 0
 ```
 
-`capture-mono` guides you on screen — it tracks image coverage, sharpness,
-steadiness and board tilt, and saves frames automatically when all gates pass.
+`capture-mono` guides you on screen — it tracks image coverage, edge reach,
+sharpness, steadiness and board tilt, and saves frames automatically when all
+gates pass. Prefer `--fourcc YUYV` where the camera offers it: MJPEG's ringing
+around high-contrast edges lands right on the checker corners.
 
 `calibrate-mono` fits `pinhole` (5 coeff), `rational` (8) and `fisheye` (4) to
 the same views and selects by **held-out** reprojection error, so extra
@@ -194,7 +197,7 @@ outputs/depth/<name>/          # disparity.npy, depth_m.npy, *.png
 All tests are hardware-independent. Run with:
 
 ```bash
-pytest        # 256 passed, 14 skipped
+pytest        # 271 passed, 14 skipped
 ```
 
 Tests use `FileSource` or synthetic data. Tests requiring the `retinify` package, a CUDA GPU, or real calibration files are auto-skipped when absent.

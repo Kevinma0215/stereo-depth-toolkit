@@ -21,7 +21,7 @@ Expected:
 
 ```
 OpenCV 4.13.0
-256 passed, 14 skipped in ~22s
+271 passed, 14 skipped in ~25s
 ```
 
 If any of the three fails, work through section 1.
@@ -91,7 +91,7 @@ files required. They use synthetic data or rendered boards.
 pytest -q
 ```
 
-Expected: **256 passed, 14 skipped** (270 collected).
+Expected: **271 passed, 14 skipped** (285 collected).
 
 ### 2.2 Useful subsets
 
@@ -112,9 +112,9 @@ Mono intrinsic calibration (this feature):
 |---|---:|---|
 | `test_mono_calib_synth.py` | 19 | model fits, ground-truth recovery, fair model selection, sanity checks, holdout split |
 | `test_undistort_mono.py` | 20 | the `K_new` pairing invariant across all three models |
-| `test_capture_gates.py` | 33 | coverage grid, blur, steadiness, tilt bins, auto-collect policy |
+| `test_capture_gates.py` | 44 | coverage grid, radial edge reach, blur, steadiness, tilt bins, auto-collect policy |
 | `test_cli_mono.py` | 25 | `calibrate-mono` / `undistort` end to end on rendered boards |
-| `test_capture_mono_live.py` | 10 | live capture loop via fake camera + fake clock |
+| `test_capture_mono_live.py` | 14 | live capture loop, pixel-format negotiation, via fake camera + fake clock |
 | `test_isaac_export.py` | 17 | USD / OpenCV parameter conversion round-trips |
 | `test_v4l2_devices.py` | 18 | `v4l2-ctl` output parsing, device listing |
 
@@ -280,7 +280,25 @@ may not be passed through.
 
 If the format list is missing: `sudo apt install v4l-utils`.
 
-### 4.2 Trial run first
+### 4.2 Pick the capture mode
+
+`stereo-depth devices` lists the formats. Two things decide the choice:
+
+- **Prefer uncompressed `YUYV`** where it exists at a usable resolution and
+  rate. MJPEG is lossy and its ringing around high-contrast edges lands on
+  the checker corners, degrading exactly the measurement being taken.
+  Uncompressed modes are usually capped at lower resolutions by USB
+  bandwidth, so this is a real trade against angular precision.
+- **Calibrate at the resolution you will deploy at.** `K` is in pixels and
+  is only valid for the mode it was shot in. Rescaling to another resolution
+  works *only if the field of view is identical* — verify with the test in
+  `docs/mono_calibration.md` §6 before relying on it.
+
+The format actually negotiated is printed at startup; a mismatch warns,
+because V4L2 falls back silently when a mode does not exist at the requested
+size or rate. Saved frames are PNG, so nothing is re-compressed later.
+
+### 4.3 Trial run first
 
 Do a short run before committing to a full session — it catches a
 mis-measured board, bad focus or bad lighting in two minutes instead of ten.
@@ -289,20 +307,20 @@ mis-measured board, bad focus or bad lighting in two minutes instead of ten.
 stereo-depth capture-mono \
   --out-dir data/mono/trial \
   --path /dev/videoN \
-  --width 1920 --height 1080 \
+  --fourcc YUYV --width 640 --height 480 --fps 30 \
   --target-views 15
 ```
 
-Then calibrate it (section 4.4). If RPE is sane and detection was stable,
-delete it and do the real run.
+Then calibrate it (section 4.5) and run the diagnostics (4.6). If RPE is sane
+and detection was stable, delete it and do the real run.
 
-### 4.3 Full collection
+### 4.4 Full collection
 
 ```bash
 stereo-depth capture-mono \
   --out-dir data/mono/$(date +%Y-%m-%d)_run1 \
   --path /dev/videoN \
-  --width 1920 --height 1080 \
+  --fourcc YUYV --width 640 --height 480 --fps 30 \
   --target-views 40 \
   --square-length 0.0298      # your measured value
 ```
@@ -324,13 +342,13 @@ side of the frame — partial views still contribute their visible corners, and
 they are the only way to get data near the edges.
 
 Watch `EDGE` specifically. Grid coverage can read complete while the corners
-never approach the frame edge, because the outer cells are wide (§4.7). On a
+never approach the frame edge, because the outer cells are wide (§4.8). On a
 wide lens the distortion coefficients come almost entirely from corners far
 from the image centre.
 
 On exit it warns about whichever of coverage, edge reach or tilt fell short.
 
-### 4.4 Calibrate
+### 4.5 Calibrate
 
 ```bash
 stereo-depth calibrate-mono \
@@ -339,7 +357,7 @@ stereo-depth calibrate-mono \
   --square-length 0.0298
 ```
 
-### 4.5 Pass criteria
+### 4.6 Pass criteria
 
 | Check | Target | Where |
 |---|---|---|
@@ -367,7 +385,7 @@ for v in sorted(r['per_view_rpe'], key=lambda x: -x['rpe_px'])[:10]:
 
 Delete the worst offenders and re-run if a few images dominate the error.
 
-### 4.6 Diagnosing a high RPE
+### 4.7 Diagnosing a high RPE
 
 When RPE misses the target, the shape of the per-view errors says what to
 look at:
@@ -441,7 +459,7 @@ add light. Target white squares around 180–220 without clipping, black
 squares 30–50. Note that `--square-length` does **not** affect RPE at all: it
 scales the object points and therefore only sets metric scale.
 
-### 4.7 Grid coverage alone is not enough
+### 4.8 Grid coverage alone is not enough
 
 A real trial on this repo reported **9/9 cells covered** on the old 3×3 grid
 while its corners never got past **79%** of the corner radius — and *zero*
@@ -463,7 +481,7 @@ collect more views with the board hanging off the frame edges, then
 recalibrate. `tests/test_capture_gates.py` keeps that 73% session as a
 regression case.
 
-### 4.8 Visual check
+### 4.9 Visual check
 
 ```bash
 stereo-depth undistort --calib outputs/calib/mono.yaml --live --path /dev/videoN

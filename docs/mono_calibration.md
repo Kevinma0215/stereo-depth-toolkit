@@ -41,6 +41,39 @@ stereo-depth capture-mono \
 Images are saved **automatically** when a frame clears every quality gate —
 no key pressing. The on-screen HUD tells you what to do next.
 
+### Choosing the capture mode
+
+`--fourcc` selects the pixel format; the default is MJPG.
+
+**Prefer `--fourcc YUYV` when your camera offers it at a usable resolution
+and frame rate.** MJPEG is lossy, and its ringing around high-contrast edges
+falls exactly on the checker corners — the one measurement the whole
+procedure depends on. YUYV is uncompressed, so the corners stay clean.
+
+```bash
+stereo-depth capture-mono \
+  --out-dir data/mono/$(date +%Y-%m-%d)_run1 \
+  --path /dev/video0 --fourcc YUYV \
+  --width 640 --height 480 --fps 30 \
+  --target-views 40
+```
+
+The format the driver actually settled on is printed at startup, and a
+mismatch warns — V4L2 silently falls back when a mode does not exist at the
+requested resolution or rate, and recording MJPEG while believing you asked
+for YUYV would defeat the point. Saved files are PNG either way, so nothing
+is re-compressed afterwards.
+
+`stereo-depth devices` lists which formats exist at which sizes. Uncompressed
+modes are usually capped at lower resolutions by USB bandwidth.
+
+> **The calibration belongs to the mode you shot it in.** `K` is in pixels,
+> so it is only valid at that resolution. Rescaling it to another resolution
+> is legitimate *only if the field of view is identical* — and a camera whose
+> 4:3 and 16:9 modes have different aspect ratios is cropping or scaling
+> somewhere. Calibrate at the resolution you will actually deploy, or verify
+> the field of view first (§7).
+
 | Element | Meaning |
 |---|---|
 | Coverage grid (top-left) | green = covered, yellow outline = where the board is now, dim red = still missing |
@@ -227,6 +260,52 @@ saves a snapshot.
 Batch mode writes `undistorted_intrinsics.yaml` **into the output folder** —
 that file holds `K_new` with zero distortion and is the one to use with those
 images.
+
+---
+
+## 6. Do two capture modes share a field of view?
+
+Worth answering before reusing one calibration at another resolution. Fix the
+board somewhere it is clearly visible and **do not move the camera**:
+
+```bash
+python - <<'PY'
+import cv2, numpy as np
+from stereo_depth.adapters.calibration.charuco_calibrator import make_charuco_board, detect_charuco
+board, dic = make_charuco_board(7, 5, 0.03, 0.022, 'DICT_5X5_100')
+
+def measure(w, h, fourcc):
+    cap = cv2.VideoCapture('/dev/video0', cv2.CAP_V4L2)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, w); cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+    for _ in range(15): ok, f = cap.read()
+    cap.release()
+    d = detect_charuco(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), board, dic)
+    if not d.ok: return None
+    p = d.corners.reshape(-1, 2)
+    return np.ptp(p[:, 0]) / f.shape[1], np.ptp(p[:, 1]) / f.shape[0]
+
+a = measure(1920, 1080, 'MJPG')          # <- your two modes
+b = measure(640, 480, 'YUYV')
+if not a or not b: raise SystemExit('board not detected - make it clearly visible')
+print(f'mode A: board spans {a[0]*100:.1f}% of width, {a[1]*100:.1f}% of height')
+print(f'mode B: board spans {b[0]*100:.1f}% of width, {b[1]*100:.1f}% of height')
+print(f'horizontal ratio {b[0]/a[0]:.3f}  (~1.00 = same horizontal FOV)')
+print(f'vertical   ratio {b[1]/a[1]:.3f}  (<1.00 = mode B sees more vertically)')
+PY
+```
+
+The board subtends a fixed angle, so the fraction of the frame it occupies is
+a direct proxy for field of view.
+
+| Horizontal ratio | Meaning |
+|---|---|
+| ≈ 1.00 | same horizontal FOV; `K` can be rescaled by the resolution ratio |
+| > 1.00 | mode B is cropped and sees less; the two modes need separate calibrations |
+
+Even when the FOV matches, remember that a lower-resolution calibration is
+angularly coarser: sub-pixel corner accuracy is roughly constant in *pixels*,
+so at 640 wide instead of 1920 each pixel spans three times the angle.
 
 ---
 
