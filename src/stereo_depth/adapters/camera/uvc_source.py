@@ -21,6 +21,7 @@ def open_source(
     height: int = 0,
     fps: int = 0,
     mjpeg: bool = True,
+    fourcc: str | None = None,
 ) -> cv2.VideoCapture:
     """Open a VideoCapture from a device index, V4L2 path, or video file.
 
@@ -30,6 +31,11 @@ def open_source(
     the camera falls back to uncompressed YUYV and is limited to ~5 fps.
     Set ``mjpeg=False`` only when reading from a video file or a source
     that does not support MJPEG.
+
+    ``fourcc`` names a pixel format explicitly (e.g. ``"YUYV"``) and takes
+    precedence over ``mjpeg``.  Uncompressed YUYV is worth the bandwidth for
+    calibration: MJPEG's ringing around high-contrast edges lands right on
+    the checker corners and degrades sub-pixel localisation.
     """
     if video:
         cap = cv2.VideoCapture(video)
@@ -38,7 +44,9 @@ def open_source(
     else:
         cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
 
-    if mjpeg and not video:
+    if fourcc and not video:
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
+    elif mjpeg and not video:
         cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
 
     if width:  cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)

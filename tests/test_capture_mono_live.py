@@ -24,8 +24,9 @@ BOARD_KW = dict(
 class FakeCap:
     """VideoCapture stand-in that replays a fixed list of frames."""
 
-    def __init__(self, frames):
+    def __init__(self, frames, fourcc="MJPG"):
         self.frames = frames
+        self.fourcc = fourcc
         self.i = 0
         self.released = False
 
@@ -35,6 +36,11 @@ class FakeCap:
         frame = self.frames[self.i]
         self.i += 1
         return True, frame.copy()
+
+    def get(self, prop):
+        if prop == cv2.CAP_PROP_FOURCC:
+            return float(cv2.VideoWriter_fourcc(*self.fourcc))
+        return 0.0
 
     def release(self):
         self.released = True
@@ -69,9 +75,16 @@ def headless(monkeypatch):
     return clock
 
 
-def _use_frames(monkeypatch, frames):
-    cap = FakeCap(frames)
-    monkeypatch.setattr(calibrate_mono, "open_source", lambda **kw: cap)
+def _use_frames(monkeypatch, frames, fourcc="MJPG"):
+    cap = FakeCap(frames, fourcc=fourcc)
+    seen = {}
+
+    def fake_open(**kw):
+        seen.update(kw)
+        return cap
+
+    monkeypatch.setattr(calibrate_mono, "open_source", fake_open)
+    cap.open_kwargs = seen
     return cap
 
 
@@ -154,6 +167,39 @@ def test_q_quits_immediately(tmp_path, monkeypatch, headless, frames):
     n = run_capture_mono(out, path="/dev/video0", **BOARD_KW)
 
     assert n == 0
+
+
+def test_requested_pixel_format_reaches_the_camera(tmp_path, monkeypatch, headless, frames):
+    cap = _use_frames(monkeypatch, frames, fourcc="YUYV")
+    _keys(monkeypatch, [ord("q")])
+
+    run_capture_mono(tmp_path / "shots", path="/dev/video0", fourcc="YUYV", **BOARD_KW)
+
+    assert cap.open_kwargs["fourcc"] == "YUYV"
+
+
+def test_format_actually_negotiated_is_reported(tmp_path, monkeypatch, headless, frames, capsys):
+    _use_frames(monkeypatch, frames, fourcc="YUYV")
+    _keys(monkeypatch, [ord("q")])
+
+    run_capture_mono(tmp_path / "shots", path="/dev/video0", fourcc="YUYV", **BOARD_KW)
+
+    assert "YUYV" in capsys.readouterr().out
+
+
+def test_warns_when_the_camera_ignores_the_requested_format(
+    tmp_path, monkeypatch, headless, frames, capsys
+):
+    """Drivers silently fall back; asking for YUYV and getting MJPG must
+    not pass unnoticed, since the point of asking was image quality."""
+    _use_frames(monkeypatch, frames, fourcc="MJPG")      # camera ignores us
+    _keys(monkeypatch, [ord("q")])
+
+    run_capture_mono(tmp_path / "shots", path="/dev/video0", fourcc="YUYV", **BOARD_KW)
+
+    printed = capsys.readouterr().out
+    assert "WARNING" in printed
+    assert "YUYV" in printed and "MJPG" in printed
 
 
 def test_camera_is_released_even_when_the_stream_ends(tmp_path, monkeypatch, headless, frames):

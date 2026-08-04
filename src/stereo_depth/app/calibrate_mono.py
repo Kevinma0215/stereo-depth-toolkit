@@ -78,6 +78,7 @@ def run_capture_mono(
     width: int = 0,
     height: int = 0,
     fps: int = 30,
+    fourcc: str | None = None,
     squares_x: int = 7,
     squares_y: int = 5,
     square_length: float = 0.03,
@@ -104,9 +105,11 @@ def run_capture_mono(
 
     try:
         device = int(path)
-        cap = open_source(device=device, width=width, height=height, fps=fps)
+        cap = open_source(device=device, width=width, height=height, fps=fps,
+                          fourcc=fourcc)
     except ValueError:
-        cap = open_source(path=path, width=width, height=height, fps=fps)
+        cap = open_source(path=path, width=width, height=height, fps=fps,
+                          fourcc=fourcc)
 
     ok, frame = cap.read()
     if not ok or frame is None:
@@ -126,7 +129,11 @@ def run_capture_mono(
     auto_on = auto
     saved_stems: list[str] = []
 
-    print(f"Capturing {w}x{h} from {path} -> {out_dir}")
+    actual = _fourcc_name(cap)
+    print(f"Capturing {w}x{h} {actual} from {path} -> {out_dir}")
+    if fourcc and actual != fourcc.upper():
+        print(f"  WARNING: asked for {fourcc.upper()} but the camera gave {actual} - "
+              "check the mode exists at this resolution (stereo-depth devices)")
     print("Move the board around the frame; tilt it left/right/up/down.")
 
     cv2.namedWindow(_WIN, cv2.WINDOW_NORMAL)
@@ -213,6 +220,14 @@ def run_capture_mono(
             print(f"  WARNING: only {p['tilts']} tilt bins seen "
                   f"(want {p['min_tilt_bins']}) - fx/fy may be poorly separated")
     return n_saved
+
+
+def _fourcc_name(cap) -> str:
+    """The pixel format the driver actually settled on, as four characters."""
+    code = int(cap.get(cv2.CAP_PROP_FOURCC))
+    if code <= 0:
+        return "?"
+    return "".join(chr((code >> (8 * i)) & 0xFF) for i in range(4)).strip()
 
 
 def _draw_capture_hud(img, policy: AutoCollectPolicy, status, n_saved: int, auto_on: bool) -> None:

@@ -14,6 +14,13 @@ def capture_mono(
     width: int = typer.Option(0, help="0 = camera default"),
     height: int = typer.Option(0, help="0 = camera default"),
     fps: int = typer.Option(30),
+    fourcc: str = typer.Option(
+        None,
+        help="Pixel format, e.g. YUYV or MJPG (default: MJPG). YUYV is "
+             "uncompressed, so it avoids the JPEG ringing that lands on the "
+             "checker corners - prefer it when the mode exists at your "
+             "resolution and frame rate.",
+    ),
     squares_x: int = typer.Option(7),
     squares_y: int = typer.Option(5),
     square_length: float = typer.Option(0.03, help="metres"),
@@ -39,6 +46,7 @@ def capture_mono(
         width=width,
         height=height,
         fps=fps,
+        fourcc=fourcc,
         squares_x=squares_x,
         squares_y=squares_y,
         square_length=square_length,
